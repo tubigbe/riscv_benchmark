@@ -21,5 +21,6 @@ __pycache__/
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
 serv_project/modules/
+serv_project/build/zephyr/
 ibex_project/
 Codespace/Ibex_codespace/
