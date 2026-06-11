@@ -41,7 +41,7 @@ HEX="firmware.hex"
 # ── Simulation settings ──────────────────────────────────────
 FUSESOC_CORE="award-winning:serv:servant:1.4.0"
 BAUD=57600
-SIM_TIMEOUT=10
+SIM_TIMEOUT=${SIM_TIMEOUT:-300}
 TRACE_DIR="$SCRIPT_DIR/build/award-winning_serv_servant_1.4.0/verilator_tb"
 
 # ══════════════════════════════════════════════════════════════
