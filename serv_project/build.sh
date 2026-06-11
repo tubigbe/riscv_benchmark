@@ -42,6 +42,7 @@ HEX="firmware.hex"
 FUSESOC_CORE="award-winning:serv:servant:1.4.0"
 BAUD=57600
 SIM_TIMEOUT=10
+TRACE_DIR="$SCRIPT_DIR/build/award-winning_serv_servant_1.4.0/verilator_tb"
 
 # ══════════════════════════════════════════════════════════════
 #  Colored output helpers
@@ -156,16 +157,21 @@ do_build() {
 do_run() {
     [[ -f "$HEX" ]] || fail "Firmware not found: $HEX — run ./build.sh --build first"
 
+    # Clean up old trace files before simulation
+    rm -f "$TRACE_DIR/trace.bin" "$TRACE_DIR/trace.vcd"
+
     info "Starting Verilator simulation..."
     info "  Core:     $FUSESOC_CORE"
     info "  Firmware: $SCRIPT_DIR/$HEX"
     info "  Baud:     $BAUD"
+    info "  Trace:    $TRACE_DIR/trace.bin"
     echo ""
 
     timeout "${SIM_TIMEOUT}s" \
         fusesoc run --target=verilator_tb "$FUSESOC_CORE" \
             --uart_baudrate="$BAUD" \
             --firmware="$SCRIPT_DIR/$HEX" \
+            --trace_pc \
         || {
             local exit_code=$?
             if [[ $exit_code -eq 124 ]]; then
@@ -174,6 +180,15 @@ do_run() {
                 fail "Simulation failed (exit code: $exit_code)"
             fi
         }
+
+    # Verify trace.bin was generated
+    if [[ -f "$TRACE_DIR/trace.bin" ]]; then
+        local trace_size
+        trace_size=$(stat -c%s "$TRACE_DIR/trace.bin")
+        ok "Trace saved: $TRACE_DIR/trace.bin ($((trace_size / 4)) PC entries)"
+    else
+        warn "trace.bin not found at $TRACE_DIR/trace.bin"
+    fi
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -181,8 +196,8 @@ do_run() {
 # ══════════════════════════════════════════════════════════════
 do_clean() {
     info "Cleaning build artifacts..."
-    rm -f "$ELF" "$BIN" "$HEX" build_*.o
-    ok "Removed: $ELF / $BIN / $HEX / build_*.o"
+    rm -f "$ELF" "$BIN" "$HEX" build_*.o "$TRACE_DIR/trace.bin" "$TRACE_DIR/trace.vcd"
+    ok "Removed: $ELF / $BIN / $HEX / build_*.o / trace.*"
 }
 
 # ══════════════════════════════════════════════════════════════
