@@ -4,8 +4,6 @@
 *.bin
 *.hex
 firmware.*
-build/
-obj_dir/
 
 # ── Simulation output ──
 trace.bin
@@ -20,15 +18,6 @@ __pycache__/
 *.bak
 *~
 
-# ── Editor (optional, uncomment if desired) ──
-# .vscode/
-
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
-serv_project/tools/
-serv_project/fusesoc_libraries/
 serv_project/modules/
-serv_project/bootloader/
-serv_project/build/
-ibex_project/
-tools/
