@@ -10,7 +10,7 @@ set -euo pipefail
 # Supported types: .c .cc .cpp .S .s .asm
 # Duplicates are automatically skipped; missing files trigger a warning.
 SOURCES=(
-    "../Codespace/SERV_codespace/popcount_SERV_return.c"
+    "../Codespace/SERV_codespace/popcount.c"
     "../Codespace/SERV_codespace/startup.S"
 )
 # ──────────────────────────────────────────────────────────────
