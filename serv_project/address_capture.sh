@@ -48,5 +48,4 @@ except StopIteration:
 cycles = stop_idx - start_idx
 print(f'  main() cycle cost: {cycles} cycles')
 print(f'  (from trace index {start_idx} to {stop_idx})')
-print("iteration completed")
 "
