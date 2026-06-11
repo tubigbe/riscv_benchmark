@@ -1,18 +1,18 @@
 riscv64-unknown-elf-objdump -d /home/chenyoo/riscv_benchmark/serv_project/firmware.elf | awk '
 /<popcount>:/ { flag = 1; next }
 flag {
-    # 确保是带有十六进制冒号的有效指令行
+    # Only count lines with hex address + valid instruction
     if ($1 ~ /^[0-9a-f]+:/) {
         if ($3 != "") inst_count[$3]++
     }
-    # 踩到 ret 标志说明 popcount 函数结束，拉闸退出
+    # Stop at ret — popcount function ends here
     if ($0 ~ /ret/) flag = 0
 }
 END {
-    print "📊 [静态分析] popcount 函数指令构成及出现次数："
+    print "[Static] popcount instruction breakdown:"
     print "========================================="
     for (ins in inst_count) {
-        printf "%-10s : %d 次\n", ins, inst_count[ins]
+        printf "%-10s : %d\n", ins, inst_count[ins]
     }
 }
 '
