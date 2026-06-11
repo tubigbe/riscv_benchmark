@@ -1,0 +1,24 @@
+Program header number 0 in `/home/chenyoo/riscv_benchmark/ibex_project/build/codespace_popcount/popcount.elf' is not of type PT_LOAD; ignoring.
+Program header number 3 in `/home/chenyoo/riscv_benchmark/ibex_project/build/codespace_popcount/popcount.elf' is not of type PT_LOAD; ignoring.
+Simulation of Ibex
+==================
+
+Tracing can be toggled by sending SIGUSR1 to this process:
+$ kill -USR1 8126
+
+Simulation running, end by pressing CTRL-c.
+TOP.ibex_simple_system.u_top.u_ibex_tracer.unnamedblk2.unnamedblk3: Writing execution trace to trace_core_00000000.log
+Terminating simulation by software request.
+- src/lowrisc_ibex_sim_shared_0/rtl/sim/simulator_ctrl.sv:93: Verilog $finish
+Received $finish() from Verilog, shutting down simulation.
+
+Simulation statistics
+=====================
+Executed cycles:  2977
+Wallclock time:   0.017 s
+Simulation speed: 175118 cycles/s (175.118 kHz)
+
+Performance Counters
+====================
+Cycles:               2973
+Instructions Retired: 1824
