@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# =================================================================
+# Binary trace file viewer for SERV simulation output.
+# Reads trace.bin (raw 32-bit PC values) and prints hex + decimal.
+# Usage: ./bin_read.py [path_to_trace.bin] [num_words]
+# =================================================================
 import os
 import struct
 
