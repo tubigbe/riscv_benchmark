@@ -29,7 +29,7 @@ SIZE=riscv64-unknown-elf-size
 ARCH=rv32i
 ABI=ilp32
 COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
-CFLAGS="-O2 $COMMON_FLAGS"
+CFLAGS="-O1 $COMMON_FLAGS"
 LDSCRIPT="fusesoc_libraries/serv/sw/link.ld"
 MAKEHEX="fusesoc_libraries/serv/sw/makehex.py"
 

@@ -23,20 +23,3 @@ halt:
     li	t0, HALT_ADDR
     sw	zero, 0(t0)
     j	halt       /* 恢复原作者的大招：死循环轰炸停机地址，逼仿真器立刻退出 */
-
-
-/* 导出给 C 语言调用的精准串口发送函数 */
-.globl asm_uart_putchar
-asm_uart_putchar:
-    mv      t0, a0          
-    li      a0, GPIO_ADDR  
-
-    ori	t0, t0, 0x100
-    slli	t0, t0, 1
-2:	sb	t0, 0(a0)
-    srli	t0, t0, 1
-    nop
-    nop
-    bnez	t0, 2b
-
-    ret
