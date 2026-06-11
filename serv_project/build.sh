@@ -5,10 +5,14 @@
 # ═══════════════════════════════════════════════════════════════
 set -euo pipefail
 
-# ── EDIT THIS: specify your source files ─────────────────────
-# Paths are relative to the serv_project/ directory
-C_SOURCE="../Codespace/SERV_codespace/popcount_SERV_return.c"
-ASM_SOURCE="../Codespace/SERV_codespace/startup.S"
+# ── EDIT THIS: source file list ──────────────────────────────
+# Add / remove entries below. Paths are relative to serv_project/.
+# Supported types: .c .cc .cpp .S .s .asm
+# Duplicates are automatically skipped; missing files trigger a warning.
+SOURCES=(
+    "../Codespace/SERV_codespace/popcount_SERV_return.c"
+    "../Codespace/SERV_codespace/startup.S"
+)
 # ──────────────────────────────────────────────────────────────
 
 # Project root (script's own directory)
@@ -17,17 +21,17 @@ cd "$SCRIPT_DIR"
 
 # ── Toolchain ────────────────────────────────────────────────
 CC=riscv64-unknown-elf-gcc
+CXX=riscv64-unknown-elf-g++
 OBJCOPY=riscv64-unknown-elf-objcopy
-OBJDUMP=riscv64-unknown-elf-objdump
 SIZE=riscv64-unknown-elf-size
 
 # ── Compiler flags ───────────────────────────────────────────
 ARCH=rv32i
 ABI=ilp32
-CFLAGS="-O2 -march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
+COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
+CFLAGS="-O2 $COMMON_FLAGS"
 LDSCRIPT="fusesoc_libraries/serv/sw/link.ld"
 MAKEHEX="fusesoc_libraries/serv/sw/makehex.py"
-RAM_WORDS=4096
 
 # ── Output files ─────────────────────────────────────────────
 ELF="firmware.elf"
@@ -46,7 +50,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
@@ -54,44 +58,93 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 
 # ══════════════════════════════════════════════════════════════
-#  BUILD: Compile firmware
+#  Classify source file type -> sets COMPILER and XFLAG
+# ══════════════════════════════════════════════════════════════
+classify_file() {
+    local ext="${1##*.}"
+    ext="$(echo "$ext" | tr '[:upper:]' '[:lower:]')"
+    case "$ext" in
+        c)             COMPILER="$CC";  XFLAG="-x c" ;;
+        cc|cpp|cxx|c++) COMPILER="$CXX"; XFLAG="-x c++" ;;
+        S|s|asm)       COMPILER="$CC";  XFLAG="-x assembler-with-cpp" ;;
+        *)             COMPILER="$CC";  XFLAG=""
+                       warn "Unknown extension '.$ext', using gcc default" ;;
+    esac
+}
+
+# ══════════════════════════════════════════════════════════════
+#  BUILD: Compile firmware from SOURCES array
 # ══════════════════════════════════════════════════════════════
 do_build() {
     info "Building firmware..."
-    info "  C source:   $C_SOURCE"
-    info "  ASM source: $ASM_SOURCE"
+    echo ""
 
-    # Check that source files exist
-    [[ -f "$C_SOURCE" ]]   || fail "C source not found: $C_SOURCE"
-    [[ -f "$ASM_SOURCE" ]] || fail "ASM source not found: $ASM_SOURCE"
-    [[ -f "$LDSCRIPT" ]]   || fail "Linker script not found: $LDSCRIPT"
-    [[ -f "$MAKEHEX" ]]    || fail "makehex.py not found: $MAKEHEX"
+    [[ -f "$LDSCRIPT" ]] || fail "Linker script not found: $LDSCRIPT"
+    [[ -f "$MAKEHEX" ]]  || fail "makehex.py not found: $MAKEHEX"
 
-    # Step 1: Compile + link
-    info "Step 1/3: gcc compile -> $ELF"
-    $CC $CFLAGS \
-        -T "$LDSCRIPT" \
-        -o "$ELF" \
-        "$ASM_SOURCE" \
-        "$C_SOURCE"
-    ok "Compiled: $ELF"
+    # Deduplicate + validate sources
+    declare -A SEEN
+    local OBJ_FILES=()
+    local COMPILED=0
+    local SKIPPED=0
 
-    # Print firmware size
+    for src in "${SOURCES[@]}"; do
+        local abs
+        abs="$(realpath "$src" 2>/dev/null || echo "$SCRIPT_DIR/$src")"
+
+        # Skip duplicates
+        if [[ -n "${SEEN[$abs]+_}" ]]; then
+            warn "Duplicate skipped: $src"
+            SKIPPED=$((SKIPPED + 1))
+            continue
+        fi
+        SEEN["$abs"]=1
+
+        # Skip missing files
+        if [[ ! -f "$src" ]]; then
+            warn "File not found, skipping: $src"
+            SKIPPED=$((SKIPPED + 1))
+            continue
+        fi
+
+        # Classify and compile
+        classify_file "$src"
+        local basename="${src##*/}"
+        local obj="build_${basename%.*}.o"
+
+        info "Compiling: $src -> $obj"
+        $COMPILER $CFLAGS $XFLAG -c -o "$obj" "$src"
+        ok "Compiled: $obj"
+        OBJ_FILES+=("$obj")
+        COMPILED=$((COMPILED + 1))
+        echo ""
+    done
+
+    [[ $COMPILED -eq 0 ]] && fail "No source files were compiled"
+    [[ $SKIPPED -gt 0 ]]  && info "Summary: $COMPILED compiled, $SKIPPED skipped"
+
+    # Link
+    info "Linking -> $ELF"
+    $CC $CFLAGS -T "$LDSCRIPT" -o "$ELF" "${OBJ_FILES[@]}"
+    ok "Linked: $ELF"
+
     echo ""
     $SIZE "$ELF"
     echo ""
 
-    # Step 2: ELF -> raw binary
-    info "Step 2/3: objcopy -> $BIN"
+    # ELF -> binary -> hex
+    info "objcopy -> $BIN"
     $OBJCOPY -O binary "$ELF" "$BIN"
     ok "Binary: $BIN ($(stat -c%s "$BIN") bytes)"
 
-    # Step 3: Binary -> hex (one 32-bit word per line, for $readmemh)
-    info "Step 3/3: makehex -> $HEX"
+    info "makehex -> $HEX"
     python3 "$MAKEHEX" "$BIN" > "$HEX"
     local hex_lines
     hex_lines=$(wc -l < "$HEX")
     ok "Hex: $HEX ($hex_lines words)"
+
+    # Cleanup intermediates
+    rm -f "${OBJ_FILES[@]}"
 
     echo ""
     ok "Build done! Outputs: $ELF / $BIN / $HEX"
@@ -104,9 +157,9 @@ do_run() {
     [[ -f "$HEX" ]] || fail "Firmware not found: $HEX — run ./build.sh --build first"
 
     info "Starting Verilator simulation..."
-    info "  Core:    $FUSESOC_CORE"
+    info "  Core:     $FUSESOC_CORE"
     info "  Firmware: $SCRIPT_DIR/$HEX"
-    info "  Baud:    $BAUD"
+    info "  Baud:     $BAUD"
     echo ""
 
     timeout "${SIM_TIMEOUT}s" \
@@ -128,8 +181,8 @@ do_run() {
 # ══════════════════════════════════════════════════════════════
 do_clean() {
     info "Cleaning build artifacts..."
-    rm -f "$ELF" "$BIN" "$HEX"
-    ok "Removed: $ELF / $BIN / $HEX"
+    rm -f "$ELF" "$BIN" "$HEX" build_*.o
+    ok "Removed: $ELF / $BIN / $HEX / build_*.o"
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -138,9 +191,11 @@ do_clean() {
 usage() {
     echo "Usage: $0 [--build] [--run] [--clean]"
     echo ""
-    echo "  --build   Compile firmware (.c + .S -> .elf -> .bin -> .hex)"
+    echo "  --build   Compile firmware (deduplicates sources automatically)"
     echo "  --run     Launch Verilator simulation"
     echo "  --clean   Remove all build artifacts"
+    echo ""
+    echo "Edit the SOURCES array at the top of this script to add/remove files."
     echo ""
     echo "Examples:"
     echo "  $0 --build          # compile only"
