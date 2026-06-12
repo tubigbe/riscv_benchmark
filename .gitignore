@@ -24,6 +24,7 @@ serv_project/modules/
 serv_project/standalone_build/
 serv_project/bootloader/
 serv_project/build/zephyr/
+serv_project/build/
 ibex_project/
 Codespace/Ibex_codespace/
 Codespace/backup_files/
