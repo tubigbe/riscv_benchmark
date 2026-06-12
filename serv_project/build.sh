@@ -10,8 +10,8 @@ set -euo pipefail
 # Supported types: .c .cc .cpp .S .s .asm
 # Duplicates are automatically skipped; missing files trigger a warning.
 SOURCES=(
-    "../Codespace/SERV_codespace/popcount.c"
     "../Codespace/SERV_codespace/startup.S"
+    "../Codespace/SERV_codespace/factorial.c"
 )
 # ──────────────────────────────────────────────────────────────
 
@@ -29,7 +29,8 @@ SIZE=riscv64-unknown-elf-size
 ARCH=rv32i
 ABI=ilp32
 COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
-CFLAGS="-O1 $COMMON_FLAGS"
+INCLUDES="-I$SCRIPT_DIR/../Codespace"
+CFLAGS="-O2 $COMMON_FLAGS $INCLUDES"
 LDSCRIPT="fusesoc_libraries/serv/sw/link.ld"
 MAKEHEX="fusesoc_libraries/serv/sw/makehex.py"
 
@@ -75,6 +76,9 @@ classify_file() {
 
 # ══════════════════════════════════════════════════════════════
 #  BUILD: Compile firmware from SOURCES array
+#  Strategy: single GCC invocation (compile + link).
+#  .S files are always placed BEFORE .c/.cpp files so the
+#  linker puts _start at the correct address.
 # ══════════════════════════════════════════════════════════════
 do_build() {
     info "Building firmware..."
@@ -83,10 +87,11 @@ do_build() {
     [[ -f "$LDSCRIPT" ]] || fail "Linker script not found: $LDSCRIPT"
     [[ -f "$MAKEHEX" ]]  || fail "makehex.py not found: $MAKEHEX"
 
-    # Deduplicate + validate sources
+    # ── Partition sources: assembly first, then C/C++ ──────
+    local ASM_SRCS=()
+    local C_SRCS=()
     declare -A SEEN
-    local OBJ_FILES=()
-    local COMPILED=0
+    local TOTAL=0
     local SKIPPED=0
 
     for src in "${SOURCES[@]}"; do
@@ -108,44 +113,43 @@ do_build() {
             continue
         fi
 
-        # Classify and compile
-        classify_file "$src"
-        local basename="${src##*/}"
-        local obj="build_${basename%.*}.o"
-
-        info "Compiling: $src -> $obj"
-        $COMPILER $CFLAGS $XFLAG -c -o "$obj" "$src"
-        ok "Compiled: $obj"
-        OBJ_FILES+=("$obj")
-        COMPILED=$((COMPILED + 1))
-        echo ""
+        local ext="${src##*.}"
+        ext="$(echo "$ext" | tr '[:upper:]' '[:lower:]')"
+        case "$ext" in
+            S|s|asm) ASM_SRCS+=("$src") ;;
+            *)       C_SRCS+=("$src") ;;
+        esac
+        TOTAL=$((TOTAL + 1))
     done
 
-    [[ $COMPILED -eq 0 ]] && fail "No source files were compiled"
-    [[ $SKIPPED -gt 0 ]]  && info "Summary: $COMPILED compiled, $SKIPPED skipped"
+    [[ $TOTAL -eq 0 ]] && fail "No source files to compile"
 
-    # Link
-    info "Linking -> $ELF"
-    $CC $CFLAGS -T "$LDSCRIPT" -o "$ELF" "${OBJ_FILES[@]}"
+    # Concatenate: assembly first, then C/C++
+    local ALL_SRCS=("${ASM_SRCS[@]}" "${C_SRCS[@]}")
+
+    info "Sources (assembly → C):"
+    for f in "${ALL_SRCS[@]}"; do info "  $f"; done
+    echo ""
+
+    # ── Single GCC command: compile + link ─────────────────
+    info "Compiling + linking -> $ELF"
+    $CC $CFLAGS -T "$LDSCRIPT" -o "$ELF" "${ALL_SRCS[@]}"
     ok "Linked: $ELF"
 
     echo ""
     $SIZE "$ELF"
     echo ""
 
-    # ELF -> binary -> hex
+    # ── ELF -> binary -> hex ───────────────────────────────
     info "objcopy -> $BIN"
     $OBJCOPY -O binary "$ELF" "$BIN"
     ok "Binary: $BIN ($(stat -c%s "$BIN") bytes)"
 
     info "makehex -> $HEX"
-    python3 "$MAKEHEX" "$BIN" > "$HEX"
+    python3 "$MAKEHEX" "$BIN" 4096 > "$HEX"
     local hex_lines
     hex_lines=$(wc -l < "$HEX")
     ok "Hex: $HEX ($hex_lines words)"
-
-    # Cleanup intermediates
-    rm -f "${OBJ_FILES[@]}"
 
     echo ""
     ok "Build done! Outputs: $ELF / $BIN / $HEX"
