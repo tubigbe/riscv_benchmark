@@ -4,7 +4,7 @@
 # Usage: ./instr_counter.sh
 # Edit the awk pattern below to target a different function name.
 # =================================================================
-riscv64-unknown-elf-objdump -d /home/chenyoo/riscv_benchmark/serv_project/firmware.elf | awk '
+riscv64-unknown-elf-objdump -d ~/riscv_benchmark/serv_project/firmware.elf | awk '
 /<popcount>:/ { flag = 1; next }
 flag {
     # Only count lines with hex address + valid instruction

@@ -46,6 +46,6 @@ def read_trace_bin(file_path, show_words=40):
             word_idx += 1
 
 if __name__ == "__main__":
-    TARGET_BIN = "/home/chenyoo/riscv_benchmark/serv_project/build/award-winning_serv_servant_1.4.0/verilator_tb/trace.bin"
+    TARGET_BIN = "~/riscv_benchmark/serv_project/build/award-winning_serv_servant_1.4.0/verilator_tb/trace.bin"
 
     read_trace_bin(TARGET_BIN, show_words=50)
