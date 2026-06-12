@@ -4,7 +4,9 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/share/verilator/include"
+                "/usr/share/verilator/include",
+                "/usr/share/verilator/include/vltstd",
+                "${workspaceFolder}/serv_project/build/award-winning_serv_servant_1.4.0/verilator_tb"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
