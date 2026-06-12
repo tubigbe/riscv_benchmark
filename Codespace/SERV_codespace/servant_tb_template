@@ -253,4 +253,5 @@ if (top->wb_clk)
 instructions needed:
     ./Vservant_sim --firmware=/home/chenyoo/riscv_benchmark/serv_project/firmware.hex --uart_baudrate=57600 --memsize=32768
     cd ~/riscv_benchmark/serv_project/build/award-winning_serv_servant_1.4.0/verilator_tb
+    rm -rf build/
 ===============================================================*/
