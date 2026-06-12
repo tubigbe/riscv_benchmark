@@ -1,0 +1,29 @@
+# ── Build artifacts ──
+*.o
+*.elf
+*.bin
+*.hex
+firmware.*
+
+# ── Simulation output ──
+trace.bin
+trace.vcd
+cps
+
+# ── Python ──
+__pycache__/
+*.pyc
+
+# ── Backup files ──
+*.bak
+*~
+
+# ── Large vendored / generated directories ──
+serv_project/zephyr/
+serv_project/modules/
+serv_project/standalone_build/
+serv_project/bootloader/
+serv_project/build/zephyr/
+ibex_project/
+Codespace/Ibex_codespace/
+Codespace/backup_files/
