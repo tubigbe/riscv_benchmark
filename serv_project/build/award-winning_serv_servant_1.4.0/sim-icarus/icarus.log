@@ -1,0 +1,4 @@
+FST info: dumpfile testlog.vcd opened for output.
+Preloading servant_tb.dut.dut.ram from hello_uart.hex
+WARNING: src/award-winning_serv_servant_1.4.0/servant/servant_ram.v:45: $readmemh(hello_uart.hex): Not enough words in the file for the requested range [0:2047].
+Loading RAM from /home/rory/riscv_benchmark/serv_project/test_lw_cycles.hex

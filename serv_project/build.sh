@@ -9,10 +9,17 @@ set -euo pipefail
 # Add / remove entries below. Paths are relative to serv_project/.
 # Supported types: .c .cc .cpp .S .s .asm
 # Duplicates are automatically skipped; missing files trigger a warning.
-SOURCES=(
-    "../Codespace/SERV_codespace/startup.S"
-    "../Codespace/SERV_codespace/factorial.c"
-)
+if [[ "${BENCH:-}" == "lw" ]]; then
+    SOURCES=(
+        "../Codespace/SERV_codespace/startup.S"
+        "../Codespace/SERV_codespace/lw_bench.S"
+    )
+else
+    SOURCES=(
+        "../Codespace/SERV_codespace/startup.S"
+        "../Codespace/SERV_codespace/popcount.c"
+    )
+fi
 # ──────────────────────────────────────────────────────────────
 
 # Project root (script's own directory)
@@ -30,7 +37,7 @@ ARCH=rv32i
 ABI=ilp32
 COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
 INCLUDES="-I$SCRIPT_DIR/../Codespace"
-CFLAGS="-O2 $COMMON_FLAGS $INCLUDES"
+CFLAGS="-O1 $COMMON_FLAGS $INCLUDES"
 LDSCRIPT="fusesoc_libraries/serv/sw/link.ld"
 MAKEHEX="fusesoc_libraries/serv/sw/makehex.py"
 
