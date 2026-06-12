@@ -1,6 +1,7 @@
 #define GPIO_ADDR 0x40000000
 #define HALT_ADDR 0x90000000
 
+.text 
 .globl _start
 _start:
     /* 1. 初始化栈指针 sp。
