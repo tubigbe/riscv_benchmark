@@ -1,2 +1,0 @@
-osource "/home/chenyoo/servWorkspace/fusesoc_libraries/serv/zephyr/soc/$(ARCH)/Kconfig"
-osource "/home/chenyoo/servWorkspace/fusesoc_libraries/serv/zephyr/soc/$(ARCH)/*/Kconfig"
