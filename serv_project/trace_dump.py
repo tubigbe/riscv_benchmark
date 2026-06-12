@@ -89,7 +89,7 @@ def build_symbol_map(elf: Path) -> dict[int, str]:
 def write_dump(pcs: list[int], symbols: dict[int, str], out: Path):
     """Write the trace dump to a text file."""
     with open(out, "w") as f:
-        f.write(f"# SERV trace dump  ({len(pcs)} cycles)\n")
+        f.write(f"# SERV trace dump\n")
         f.write(f"# {'index':>6s}  {'PC':>12s}  {'symbol'}\n")
         f.write(f"# {'-'*6}  {'-'*12}  {'-'*30}\n")
         for i, pc in enumerate(pcs):
@@ -112,7 +112,6 @@ def main():
 
     # Read trace
     pcs = read_trace(trace_path)
-    print(f"  Parsed {len(pcs)} cycles from trace.bin")
 
     # Build symbol map
     symbols = build_symbol_map(elf_path)
