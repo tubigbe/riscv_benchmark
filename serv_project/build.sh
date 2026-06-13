@@ -9,14 +9,22 @@ set -euo pipefail
 # Add / remove entries below. Paths are relative to serv_project/.
 # Supported types: .c .cc .cpp .S .s .asm
 # Duplicates are automatically skipped; missing files trigger a warning.
+#
+# Select firmware with: BENCH=lw ./build.sh --build --run
+#   default  → factorial demo (startup + factorial.c)
+#   lw       → load-word cycle benchmark (startup + test_lw_cycles.s + main.c)
+# ──────────────────────────────────────────────────────────────
+STARTUP="../Codespace/SERV_codespace/startup.S"
+
 if [[ "${BENCH:-}" == "lw" ]]; then
     SOURCES=(
-        "../Codespace/SERV_codespace/startup.S"
-        "../Codespace/SERV_codespace/startup.S"
+        "$STARTUP"
+        "test_lw_cycles.s"
+        "main.c"
     )
 else
     SOURCES=(
-        "../Codespace/SERV_codespace/startup.S"
+        "$STARTUP"
         "../Codespace/SERV_codespace/factorial.c"
     )
 fi
