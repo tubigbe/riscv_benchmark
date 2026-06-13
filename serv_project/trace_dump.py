@@ -6,7 +6,7 @@ Reads the raw 32-bit-integer binary trace and writes one line per cycle:
     [index]  0xXXXXXXXX  <symbol>       (if symbol resolved)
     [index]  0xXXXXXXXX                  (otherwise)
 
-Optionally resolves PCs to symbols via riscv64-unknown-elf-objdump -d.
+Optionally resolves PCs to symbols via $OBJDUMP (set by Codespace/env.sh).
 
 Usage:
     python3 trace_dump.py                         # auto-detect paths
@@ -24,6 +24,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TRACE = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
 DEFAULT_ELF   = SCRIPT_DIR / "firmware.elf"
 DEFAULT_OUT   = SCRIPT_DIR / "trace_dump.txt"
+
+# ── Tool from environment (set by Codespace/env.sh) ─────────
+OBJDUMP = os.environ.get("OBJDUMP", "riscv64-unknown-elf-objdump")
 
 
 def parse_args():
@@ -50,10 +53,11 @@ def build_symbol_map(elf: Path) -> dict[int, str]:
         return sym
     try:
         result = subprocess.run(
-            ["riscv64-unknown-elf-objdump", "-d", str(elf)],
+            [OBJDUMP, "-d", str(elf)],
             capture_output=True, text=True, timeout=30,
         )
     except FileNotFoundError:
+        print(f"WARNING: {OBJDUMP} not found, skipping symbol resolution", file=sys.stderr)
         return sym
 
     current_func = ""
