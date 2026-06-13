@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
               << std::endl;
 
     // Safety limit to prevent infinite simulation
-    const uint64_t MAX_CYCLES = 1000000;
+    const uint64_t MAX_CYCLES = 10000000;
 
     // ── Main simulation loop ─────────────────────────────────
     while (!Verilated::gotFinish() && current_cycle < MAX_CYCLES) {
