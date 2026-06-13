@@ -1,22 +1,176 @@
 # SERV RISC-V Benchmark Toolchain
 
-Build, simulate, and analyze firmware for the [SERV](https://github.com/olofk/serv) RISC-V CPU on Verilator.
+Build, simulate, and analyze firmware for the [SERV](https://github.com/olofk/serv) RISC-V CPU using Verilator.
 
-## Quick Start
+This repository contains everything needed to compile bare-metal RV32I firmware, run it on a simulated SERV processor, and analyze cycle-level performance from instruction traces.
+
+---
+
+## New Teammate Setup Guide
+
+Follow these steps to get a working development environment from scratch.
+
+### Step 1 — Clone the repository
+
+You **must** include `--recurse-submodules` to pull the SERV CPU core, FuseSoC libraries, and other dependencies:
+
+```bash
+git clone --recurse-submodules https://github.com/tubigbe/riscv_benchmark.git
+cd riscv_benchmark
+```
+
+> **Already cloned without `--recurse-submodules`?** The submodule directories (`serv_project/fusesoc_libraries/serv/`, `mdu/`, `fusesoc_cores/`) will be empty. Fix this by running:
+> ```bash
+> cd ~/riscv_benchmark
+> git submodule update --init --recursive
+> ```
+
+### Step 2 — Run the setup script
+
+The setup script initializes submodules, loads the environment, and verifies all required tools:
+
+```bash
+./setup.sh
+```
+
+You should see output like:
+
+```
+========================================
+  riscv_benchmark setup
+========================================
+
+[INFO]  Initializing git submodules...
+[OK]    Submodules ready
+[INFO]  Verifying submodule content...
+[OK]      serv_project/fusesoc_libraries/serv
+[OK]      serv_project/fusesoc_libraries/mdu
+[OK]      serv_project/fusesoc_libraries/fusesoc_cores
+[INFO]  Loading environment...
+[OK]    Environment loaded
+[INFO]  Checking required tools...
+[OK]      RISC-V GCC: /home/you/riscv_benchmark/tools/riscv64/usr/bin/riscv64-unknown-elf-gcc
+[OK]      Python 3: ...
+[OK]      FuseSoC: ...
+[OK]      Verilator: ...
+[OK]      Make: ...
+========================================
+[OK]    Setup complete! All tools ready.
+========================================
+```
+
+If any tool shows "not found", see the **Troubleshooting** section below.
+
+### Step 3 — Load the environment
+
+The environment is **auto-loaded** when you open a terminal inside `~/riscv_benchmark/` (via `.bashrc` integration).
+
+To load it manually in any terminal:
+
+```bash
+source ~/riscv_benchmark/Codespace/env.sh
+```
+
+This adds the RISC-V toolchain, FuseSoC, Verilator, and Make to your `PATH`.
+
+### Step 4 — Build and run your first simulation
 
 ```bash
 cd ~/riscv_benchmark/serv_project
-
-# 1. Edit SOURCES in build.sh, then:
 ./build.sh --build --run
-
-# 2. Analyze:
-./address_capture.sh    # cycle count for main()
-./instr_counter.sh      # static instruction breakdown
-./bin_read.py           # raw trace.bin viewer
 ```
 
-## Files
+You should see:
+
+```
+[INFO]  Building firmware...
+[INFO]  Compiling + linking -> firmware.elf
+[OK]    Linked: firmware.elf
+[OK]    Binary: firmware.bin (642 bytes)
+[OK]    Hex: firmware.hex (161 words)
+[OK]    Build done!
+[INFO]  Starting Verilator simulation...
+Loading RAM from firmware.hex
+factorial:
+  1! = 1
+  2! = 2
+  ...
+  10! = 3628800
+done
+Test complete
+[OK]    Trace saved: .../trace.bin (20988 PC entries)
+```
+
+### Step 5 — Analyze results
+
+```bash
+./cycle_counter.sh                        # cycles for main()
+./address_capture.sh                      # display main() PC addresses
+./instr_counter.sh main                   # instruction histogram for main()
+python3 bin_read.py                       # raw trace.bin viewer
+python3 trace_dump.py                     # full trace with symbol names
+```
+
+---
+
+## Prerequisites
+
+The project bundles local toolchains under `tools/`. After cloning and running `./setup.sh`, you should have:
+
+| Tool | Purpose | Bundled? |
+|------|---------|----------|
+| `riscv64-unknown-elf-gcc` | RV32I bare-metal compiler | Yes (`tools/riscv64/`) |
+| `make` | Build system | Yes (`tools/make/`) |
+| `fusesoc` | FPGA/ASIC package manager | Yes (`tools/fusesoc-venv/`) |
+| `verilator` | Verilog simulator | Yes (`tools/verilator/`) |
+| `python3` | Scripting | System |
+
+**System requirements:** Linux (Ubuntu 22.04+ recommended), `git`, `python3`.
+
+---
+
+## Project Structure
+
+```
+riscv_benchmark/
+├── setup.sh                          # one-time setup (run this first!)
+├── readme.markdown                   # this file
+├── .gitmodules                       # submodule definitions
+│
+├── Codespace/
+│   ├── env.sh                        # environment setup (auto-loaded)
+│   └── SERV_codespace/
+│       ├── startup.S                 # boot code (_start, UART, halt)
+│       ├── factorial.c               # example: factorial via soft_mul
+│       ├── popcount.c                # example: popcount
+│       └── standalone_hello.S        # example: self-contained ASM
+│
+├── serv_project/
+│   ├── build.sh                      # build firmware & run simulation
+│   ├── cycle_counter.sh              # cycle counting for main()
+│   ├── address_capture.sh            # display function PC addresses
+│   ├── instr_counter.sh              # instruction histogram
+│   ├── bin_read.py                   # trace.bin hex viewer
+│   ├── trace_dump.py                 # full trace with symbol resolution
+│   ├── bnez_counter.sh               # instruction address lookup
+│   ├── firmware.elf                  # compiled ELF (generated)
+│   ├── firmware.hex                  # hex for $readmemh (generated)
+│   └── fusesoc_libraries/            # git submodules
+│       ├── serv/                     #   SERV CPU core
+│       ├── mdu/                      #   Multiply/Divide Unit
+│       └── fusesoc_cores/            #   FuseSoC standard library
+│
+└── tools/                            # local toolchains (git-ignored)
+    ├── riscv64/                      #   RISC-V GCC cross-compiler
+    ├── make/                         #   GNU Make
+    ├── fusesoc-venv/                 #   FuseSoC in Python venv
+    ├── verilator/                    #   Verilator simulator
+    └── gcc-host/                     #   Host GCC (for Verilator C++ build)
+```
+
+---
+
+## Tool Reference
 
 ### `build.sh` — Build & simulate
 
@@ -24,64 +178,157 @@ Compiles C/ASM sources into SERV firmware and runs Verilator simulation.
 
 | Flag | Action |
 |------|--------|
-| `--build` | Compile SOURCES array → `firmware.elf` → `.bin` → `.hex` |
+| `--build` | Compile SOURCES → `firmware.elf` → `.bin` → `.hex` |
 | `--run` | Run simulation, generate `trace.bin` (PC trace) |
 | `--build --run` | Both |
 | `--clean` | Remove all build artifacts |
 
-Edit the `SOURCES` array at the top to point to your `.c` / `.S` files. Supported: `.c .cc .cpp .S .s .asm`. Duplicates are auto-skipped.
+Edit the `SOURCES` array at the top of `build.sh` to point to your `.c` / `.S` files. Supported extensions: `.c .cc .cpp .S .s .asm`. Duplicates are auto-skipped.
 
-**RV32I constraint:** No hardware multiply/divide. Avoid `*`, `/`, `%` in C (compiler emits `__mulsi3`/`__udivsi3` which won't link with `-nostdlib`). Use shift-and-add instead.
+**RV32I constraint:** No hardware multiply/divide. Avoid `*`, `/`, `%` in C (the compiler emits `__mulsi3`/`__udivsi3` which won't link with `-nostdlib`). Use shift-and-add instead.
 
-### `address_capture.sh` — Cycle counter
+### `cycle_counter.sh` — Cycle count for main()
 
 Extracts `main()` start/stop PCs from `firmware.elf`, then counts cycles between them in `trace.bin`.
 
+```bash
+./cycle_counter.sh                              # defaults
+./cycle_counter.sh path/to/firmware.elf path/to/trace.bin
 ```
-Start PC (main):  0x48
-Stop  PC (ret):   0x6c
-main() cycle cost: 178 cycles
+
+Output:
+```
+Start PC (main):  0x164
+Stop  PC (ret):   0x25c
+main() cycle cost: 20980 cycles
+```
+
+### `address_capture.sh` — Display function PC addresses
+
+Shows the start and stop PC of any function in the ELF.
+
+```bash
+./address_capture.sh                            # default: main
+./address_capture.sh firmware.elf asm_uart_putchar
 ```
 
 ### `instr_counter.sh` — Instruction histogram
 
-Prints static instruction counts from the `popcount` function in `firmware.elf`. Edit the awk pattern to target a different function name.
-
-```
-andi       : 1
-srl        : 1
-li         : 3
-...
-```
-
-### `bin_read.py` — Binary trace viewer
-
-Dumps `trace.bin` as hex + decimal for inspection. Usage:
+Prints static instruction counts for a given function.
 
 ```bash
-python3 bin_read.py                          # default: first 50 words
-python3 bin_read.py                          # or ./bin_read.py (executable)
+./instr_counter.sh                              # default: _start
+./instr_counter.sh main                         # target: main()
+./instr_counter.sh asm_uart_putchar             # target: asm_uart_putchar
 ```
 
-## File Layout
+### `bin_read.py` — Raw trace viewer
 
-```
-serv_project/
-  build.sh                  # build & simulate
-  address_capture.sh        # cycle counting
-  instr_counter.sh          # instruction histogram
-  bin_read.py               # trace.bin viewer
-  firmware.elf              # compiled ELF (generated)
-  firmware.hex              # hex for $readmemh (generated)
-  ../Codespace/SERV_codespace/
-    popcount.c              # example firmware source
-    startup.S               # boot code (_start, UART, halt)
-    factorial.c             # example: factorial via soft_mul
-    standalone_hello.S      # example: self-contained ASM
+Dumps `trace.bin` as hex + decimal for inspection.
+
+```bash
+python3 bin_read.py                             # default: first 50 words
+python3 bin_read.py path/to/trace.bin 100       # custom file + word count
 ```
 
-## Dependencies
+### `trace_dump.py` — Full trace with symbols
 
-- `riscv64-unknown-elf-gcc` (or `riscv32-unknown-elf-gcc`)
-- Python 3
-- FuseSoC + Verilator (for simulation)
+Converts `trace.bin` into a human-readable text file with symbol resolution via `objdump`.
+
+```bash
+python3 trace_dump.py                           # auto-detect paths
+python3 trace_dump.py trace.bin firmware.elf output.txt
+```
+
+### `bnez_counter.sh` — Instruction address lookup
+
+Finds the PC address of a specific instruction inside a function.
+
+```bash
+./bnez_counter.sh bnez asm_uart_putchar         # find 'bnez' in asm_uart_putchar
+./bnez_counter.sh jal main                      # find 'jal' in main
+```
+
+---
+
+## Troubleshooting
+
+### `command not found: riscv64-unknown-elf-gcc`
+
+The environment isn't loaded. Run:
+
+```bash
+source ~/riscv_benchmark/Codespace/env.sh
+```
+
+Or open a **new terminal** — the environment auto-loads when inside `~/riscv_benchmark/`.
+
+### `command not found: make` or `command not found: verilator`
+
+The local tools aren't on your PATH. Either:
+
+1. Open a new terminal (auto-load should pick them up), or
+2. Run `source ~/riscv_benchmark/Codespace/env.sh`
+
+### Submodule directories are empty
+
+This happens when you cloned without `--recurse-submodules`. Fix:
+
+```bash
+cd ~/riscv_benchmark
+git submodule update --init --recursive
+```
+
+### `fatal error: cstdint: No such file or directory`
+
+The C++ standard library headers are missing. This is needed for Verilator's C++ testbench compilation. Install them:
+
+```bash
+sudo apt install g++ libstdc++-15-dev
+```
+
+### `Permission denied` when running scripts
+
+Make the scripts executable:
+
+```bash
+chmod +x *.sh *.py
+```
+
+### Simulation hangs or times out
+
+The default timeout is 300 seconds. For longer simulations:
+
+```bash
+SIM_TIMEOUT=600 ./build.sh --run
+```
+
+### Build fails with `__mulsi3` / `__udivsi3` undefined
+
+Your C code uses `*`, `/`, or `%`. SERV has no hardware multiply/divide. Replace with shift-and-add operations.
+
+---
+
+## Git Workflow
+
+```bash
+# Create a feature branch
+git checkout -b my-feature
+
+# Make changes, then commit
+git add -A
+git commit -m "description of changes"
+
+# Push to your branch
+git push origin my-feature
+
+# Create a Pull Request on GitHub
+```
+
+**Important:** Always pull the latest changes before starting work:
+
+```bash
+git pull origin main
+git submodule update --init --recursive
+```
+
