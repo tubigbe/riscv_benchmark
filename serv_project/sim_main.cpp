@@ -13,6 +13,7 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <cstdint>
 #include <iomanip>
@@ -24,6 +25,16 @@
 double sc_time_stamp() { return 0; }
 
 int main(int argc, char** argv) {
+    // ── Redirect stdout to log file ──────────────────────────
+    const char* logfile = "sim_log.txt";
+    std::ofstream ofs(logfile);
+    if (!ofs) {
+        std::cerr << "[ERROR] Cannot open log file: " << logfile << std::endl;
+        return 1;
+    }
+    // Save original cout buffer so we can restore it before ofs is destroyed
+    std::streambuf* orig_buf = std::cout.rdbuf(ofs.rdbuf());
+
     // ── Initialise Verilator and the top-level module ────────
     Verilated::commandArgs(argc, argv);
     auto top = std::make_unique<Vservant_sim>();
@@ -54,7 +65,7 @@ int main(int argc, char** argv) {
               << std::endl;
 
     // Safety limit to prevent infinite simulation
-    const uint64_t MAX_CYCLES = 2000;
+    const uint64_t MAX_CYCLES = 1000000;
 
     // ── Main simulation loop ─────────────────────────────────
     while (!Verilated::gotFinish() && current_cycle < MAX_CYCLES) {
@@ -127,5 +138,8 @@ int main(int argc, char** argv) {
     }
 
     top->final();
+
+    // Restore original cout buffer before ofs is destroyed
+    std::cout.rdbuf(orig_buf);
     return 0;
 }
