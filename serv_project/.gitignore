@@ -13,6 +13,7 @@ firmware.hex
 *.vcd
 trace.bin
 cps
+sim_log.txt
 
 # ── OS / editor junk ────────────────────────────────────────
 .DS_Store
