@@ -12,22 +12,14 @@ Follow these steps to get a working development environment from scratch.
 
 ### Step 1 — Clone the repository
 
-You **must** include `--recurse-submodules` to pull the SERV CPU core, FuseSoC libraries, and other dependencies:
-
 ```bash
-git clone --recurse-submodules https://github.com/tubigbe/riscv_benchmark.git
+git clone https://github.com/tubigbe/riscv_benchmark.git
 cd riscv_benchmark
 ```
 
-> **Already cloned without `--recurse-submodules`?** The submodule directories (`serv_project/fusesoc_libraries/serv/`, `mdu/`, `fusesoc_cores/`) will be empty. Fix this by running:
-> ```bash
-> cd ~/riscv_benchmark
-> git submodule update --init --recursive
-> ```
-
 ### Step 2 — Run the setup script
 
-The setup script initializes submodules, loads the environment, and verifies all required tools:
+The setup script fetches all submodules (SERV CPU core, FuseSoC libraries, etc.), loads the environment, and verifies your tools:
 
 ```bash
 ./setup.sh
@@ -272,11 +264,11 @@ The local tools aren't on your PATH. Either:
 
 ### Submodule directories are empty
 
-This happens when you cloned without `--recurse-submodules`. Fix:
+Run the setup script to fetch them:
 
 ```bash
 cd ~/riscv_benchmark
-git submodule update --init --recursive
+./setup.sh
 ```
 
 ### `fatal error: cstdint: No such file or directory`
@@ -329,6 +321,6 @@ git push origin my-feature
 
 ```bash
 git pull origin main
-git submodule update --init --recursive
+./setup.sh
 ```
 
