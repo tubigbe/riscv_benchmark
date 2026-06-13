@@ -12,12 +12,12 @@ set -euo pipefail
 if [[ "${BENCH:-}" == "lw" ]]; then
     SOURCES=(
         "../Codespace/SERV_codespace/startup.S"
-        "../Codespace/SERV_codespace/lw_bench.S"
+        "../Codespace/SERV_codespace/startup.S"
     )
 else
     SOURCES=(
         "../Codespace/SERV_codespace/startup.S"
-        "../Codespace/SERV_codespace/popcount.c"
+        "../Codespace/SERV_codespace/factorial.c"
     )
 fi
 # ──────────────────────────────────────────────────────────────
