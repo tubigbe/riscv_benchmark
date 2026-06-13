@@ -29,7 +29,18 @@ export IBEX_REPO="$IBEX_PROJECT/vendor/ibex"
 # Project-local tool wrappers
 # ----------------------------
 export RISCV="$RISCV_BENCHMARK/tools/riscv"
+export RISCV64_TOOLS="$RISCV_BENCHMARK/tools/riscv64/usr/bin"
+export FUSESOC_VENV="$RISCV_BENCHMARK/tools/fusesoc-venv/bin"
+export MAKE_TOOLS="$RISCV_BENCHMARK/tools/make/usr/bin"
+export GCC_HOST_TOOLS="$RISCV_BENCHMARK/tools/gcc-host/usr/bin"
+export GCC_HOST_INCLUDE="$RISCV_BENCHMARK/tools/gcc-host/usr/local/include"
+export VERILATOR_TOOLS="$RISCV_BENCHMARK/tools/verilator/usr/bin"
+
 path_prepend_once "$HOME/.local/bin"
+path_prepend_once "$FUSESOC_VENV"
+path_prepend_once "$VERILATOR_TOOLS"
+path_prepend_once "$MAKE_TOOLS"
+path_prepend_once "$RISCV64_TOOLS"
 path_prepend_once "$RISCV/bin"
 
 # ----------------------------
@@ -37,8 +48,15 @@ path_prepend_once "$RISCV/bin"
 # ----------------------------
 export PYTHON="/usr/bin/python3"
 export PIP="/usr/bin/pip3"
-export VERILATOR="/usr/bin/verilator"
-export FUSESOC="$HOME/.local/bin/fusesoc"
+export VERILATOR="$(which verilator 2>/dev/null || echo $VERILATOR_TOOLS/verilator)"
+if [[ -x "$FUSESOC_VENV/fusesoc" ]]; then
+    export FUSESOC="$FUSESOC_VENV/fusesoc"
+else
+    export FUSESOC="$(which fusesoc 2>/dev/null || echo $HOME/.local/bin/fusesoc)"
+fi
+export CPATH="${CPATH:+:$CPATH}"
+export C_INCLUDE_PATH="${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}"
+export CPLUS_INCLUDE_PATH="${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
 
 # ----------------------------
 # RISC-V bare-metal toolchain
