@@ -1,0 +1,20 @@
+# ── Verilator build output ───────────────────────────────────
+obj_dir_custom/
+
+# ── FuseSoC build output ────────────────────────────────────
+build/
+
+# ── Compiled firmware artifacts ─────────────────────────────
+firmware.elf
+firmware.bin
+firmware.hex
+
+# ── Simulation output ───────────────────────────────────────
+*.vcd
+trace.bin
+cps
+
+# ── OS / editor junk ────────────────────────────────────────
+.DS_Store
+*~
+*.swp
