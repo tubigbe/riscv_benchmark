@@ -41,6 +41,12 @@ with open(TRACE_DUMP, "r") as f:
 
 # ── Parse sim_log.txt and merge ──────────────────────────────
 # Lines look like:  "0x4 -> 0x8 : 36 cycles"
+#
+# Some instructions (e.g. sw, lbu) span two entries in sim_log:
+#   0x168 -> 0xffc : 36 cycles   (first half — has a mnemonic)
+#   0xffc -> 0x16c : 34 cycles   (second half — ??? in trace)
+# When a ??? entry's from_addr == prev to_addr, merge them
+# so the combined cycle cost is reported under the real instruction.
 results = []
 last_mnemonic = "???"
 with open(SIM_LOG, "r") as f:
@@ -52,9 +58,14 @@ with open(SIM_LOG, "r") as f:
         from_addr = int(m.group(1), 16)
         to_addr   = int(m.group(2), 16)
         cycles    = int(m.group(3))
-        mnemonic  = instr_map.get(from_addr, last_mnemonic)
-        last_mnemonic = mnemonic
-        results.append((from_addr, to_addr, mnemonic, cycles))
+        mnemonic  = instr_map.get(from_addr, "???")
+
+        # Merge ??? continuations into the previous entry
+        if mnemonic == "???" and results and from_addr == results[-1][1]:
+            prev = results[-1]
+            results[-1] = (prev[0], to_addr, prev[2], prev[3] + cycles)
+        else:
+            results.append((from_addr, to_addr, mnemonic, cycles))
 
 # ── Write output ─────────────────────────────────────────────
 with open(OUTPUT, "w") as f:

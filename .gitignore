@@ -4,6 +4,8 @@
 *.bin
 *.hex
 firmware.*
+Codespace/practice_zhang/compilation/
+Codespace/practice_zhang/bin/
 
 # ── Simulation output ──
 trace.bin
@@ -35,3 +37,4 @@ Codespace/Ibex_codespace/
 Codespace/backup_files/
 tools/
 serv_project/log
+Codespace/practice_zhang/
