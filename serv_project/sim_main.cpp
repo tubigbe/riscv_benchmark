@@ -21,9 +21,11 @@
 
 #include "Vservant_sim.h"  // Auto-generated header by Verilator for servant_sim
 #include "verilated.h"
+#include "verilated_vcd_c.h"  // VCD trace support
 
 // Required by Verilator when $time is referenced in Verilog
-double sc_time_stamp() { return 0; }
+static uint64_t sim_time = 0;
+double sc_time_stamp() { return sim_time; }
 
 int main(int argc, char** argv) {
     // ── Redirect stdout to log file ──────────────────────────
@@ -40,6 +42,19 @@ int main(int argc, char** argv) {
     // ── Initialise Verilator and the top-level module ────────
     Verilated::commandArgs(argc, argv);
     auto top = std::make_unique<Vservant_sim>();
+
+    // ── VCD trace setup ─────────────────────────────────────
+    VerilatedVcdC* tfp = nullptr;
+    {
+        const char* vcd_arg = Verilated::commandArgsPlusMatch("vcd=");
+        if (vcd_arg[0]) {
+            Verilated::traceEverOn(true);
+            tfp = new VerilatedVcdC;
+            top->trace(tfp, 99);       // Trace 99 levels of hierarchy
+            tfp->open("log/sim_wave.vcd");
+            std::cout << "[VCD] Tracing enabled -> log/sim_wave.vcd" << std::endl;
+        }
+    }
 
     // Simulation state
     uint64_t main_time     = 0;  // Half-cycle time counter
@@ -73,6 +88,9 @@ int main(int argc, char** argv) {
     while (!Verilated::gotFinish() && current_cycle < MAX_CYCLES) {
         top->wb_clk = !top->wb_clk;  // Toggle clock
         top->eval();                 // Propagate combinational logic
+
+        // Dump VCD on every half-cycle
+        if (tfp) tfp->dump(main_time);
 
         // Only sample signals on the rising clock edge
         if (top->wb_clk == 1) {
@@ -129,6 +147,7 @@ int main(int argc, char** argv) {
         }
 
         main_time++;
+        sim_time = main_time;  // Keep sc_time_stamp() in sync
     }
 
     // ── Simulation end ───────────────────────────────────────
@@ -137,6 +156,13 @@ int main(int argc, char** argv) {
                   << MAX_CYCLES
                   << "). Exiting."
                   << std::endl;
+    }
+
+    // Flush and close VCD trace
+    if (tfp) {
+        tfp->flush();
+        tfp->close();
+        std::cout << "[VCD] Trace file closed: log/sim_wave.vcd" << std::endl;
     }
 
     top->final();

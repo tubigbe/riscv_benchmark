@@ -119,6 +119,7 @@ if $DO_BUILD; then
         "${VERILOG_SOURCES[@]}" \
         --exe "${CPP_SOURCES[@]}" \
         --top-module servant_sim \
+        --trace \
         --Mdir "$BUILD_DIR" \
         -o Vservant_sim \
         -CFLAGS "-std=c++17"
@@ -150,6 +151,7 @@ if $DO_RUN; then
     echo "════════════════════════════════════════"
     echo "  Firmware : ${FIRMWARE}"
     echo "  Binary   : ${BINARY}"
+    echo "  VCD      : log/sim_wave.vcd"
     echo "════════════════════════════════════════"
-    "$BINARY" "+firmware=${FIRMWARE}"
+    "$BINARY" "+firmware=${FIRMWARE}" "+vcd=1"
 fi
