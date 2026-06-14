@@ -20,9 +20,10 @@ import sys
 
 # ── Locate files ─────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SIM_LOG    = os.path.join(SCRIPT_DIR, "sim_log.txt")
-TRACE_DUMP = os.path.join(SCRIPT_DIR, "trace_dump.txt")
-OUTPUT     = os.path.join(SCRIPT_DIR, "compare_result.txt")
+LOG_DIR    = os.path.join(SCRIPT_DIR, "log")
+SIM_LOG    = os.path.join(LOG_DIR, "sim_log.txt")
+TRACE_DUMP = os.path.join(LOG_DIR, "trace_dump.txt")
+OUTPUT     = os.path.join(LOG_DIR, "compare_result.txt")
 
 # ── Parse trace_dump.txt → {address: mnemonic} ───────────────
 # Lines look like:  "       3  0x0000000c  sb"

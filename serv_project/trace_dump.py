@@ -23,7 +23,10 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TRACE = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
 DEFAULT_ELF   = SCRIPT_DIR / "firmware.elf"
-DEFAULT_OUT   = SCRIPT_DIR / "trace_dump.txt"
+DEFAULT_OUT   = SCRIPT_DIR / "log" / "trace_dump.txt"
+
+# Ensure log directory exists
+os.makedirs(SCRIPT_DIR / "log", exist_ok=True)
 
 
 def parse_args():

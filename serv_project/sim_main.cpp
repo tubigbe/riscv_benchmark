@@ -17,6 +17,7 @@
 #include <memory>
 #include <cstdint>
 #include <iomanip>
+#include <sys/stat.h>
 
 #include "Vservant_sim.h"  // Auto-generated header by Verilator for servant_sim
 #include "verilated.h"
@@ -26,7 +27,8 @@ double sc_time_stamp() { return 0; }
 
 int main(int argc, char** argv) {
     // ── Redirect stdout to log file ──────────────────────────
-    const char* logfile = "sim_log.txt";
+    mkdir("log", 0755);  // Ensure log/ directory exists
+    const char* logfile = "log/sim_log.txt";
     std::ofstream ofs(logfile);
     if (!ofs) {
         std::cerr << "[ERROR] Cannot open log file: " << logfile << std::endl;

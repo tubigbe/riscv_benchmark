@@ -15,6 +15,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Ensure log directory exists
+mkdir -p log
+
 # ── Configuration ────────────────────────────────────────────
 BUILD_DIR="obj_dir_custom"
 BINARY="./${BUILD_DIR}/Vservant_sim"
