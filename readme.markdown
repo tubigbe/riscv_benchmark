@@ -28,19 +28,19 @@ cd ~/riscv_benchmark/serv_project
 ./build.sh --build --run
 
 # Step 2: Run SERV simulation and log per-instruction cycle cost
-#         Produces: sim_log.txt   (one line per PC transition + cycle count)
+#         Produces: log/sim_log.txt   (one line per PC transition + cycle count)
 ./run_sim.sh
 
 # Step 3: Decode the PC trace into instruction mnemonics
-#         Produces: trace_dump.txt  (address → instruction name)
+#         Produces: log/trace_dump.txt  (address → instruction name)
 ./trace_dump.py
 
 # Step 4: Merge the two logs into a final report
-#         Produces: compare_result.txt  (per-instruction cost + summary)
+#         Produces: log/compare_result.txt  (per-instruction cost + summary)
 python3 compare_traces.py
 ```
 
-**Output (`compare_result.txt`):**
+**Output (`log/compare_result.txt`):**
 
 ```
 #         PC     Next PC  Instr     Cycles
@@ -70,9 +70,9 @@ python3 compare_traces.py
 | Step | Script | Reads | Produces | Purpose |
 |------|--------|-------|----------|---------|
 | 1 | `build.sh` | C/ASM sources | `firmware.hex`, `trace.bin` | Compile & simulate |
-| 2 | `run_sim.sh` | `firmware.hex` | `sim_log.txt` | Per-instruction cycle count |
-| 3 | `trace_dump.py` | `trace.bin` | `trace_dump.txt` | PC → instruction mnemonic |
-| 4 | `compare_traces.py` | `sim_log.txt` + `trace_dump.txt` | `compare_result.txt` | Final merged report |
+| 2 | `run_sim.sh` | `firmware.hex` | `log/sim_log.txt` | Per-instruction cycle count |
+| 3 | `trace_dump.py` | `trace.bin` | `log/trace_dump.txt` | PC → instruction mnemonic |
+| 4 | `compare_traces.py` | `log/sim_log.txt` + `log/trace_dump.txt` | `log/compare_result.txt` | Final merged report |
 
 ## Files
 
@@ -93,7 +93,7 @@ Edit the `SOURCES` array at the top to point to your `.c` / `.S` files. Supporte
 
 ### `run_sim.sh` — Cycle-cost simulation
 
-Builds and runs the Verilator simulation, logging every PC transition with its cycle cost to `sim_log.txt`.
+Builds and runs the Verilator simulation, logging every PC transition with its cycle cost to `log/sim_log.txt`.
 
 | Flag | Action |
 |------|--------|
@@ -105,7 +105,7 @@ Builds and runs the Verilator simulation, logging every PC transition with its c
 
 ### `trace_dump.py` — PC trace decoder
 
-Reads `trace.bin` and decodes each PC address into its RISC-V instruction mnemonic. Writes `trace_dump.txt`.
+Reads `trace.bin` and decodes each PC address into its RISC-V instruction mnemonic. Writes `log/trace_dump.txt`.
 
 ```bash
 ./trace_dump.py
@@ -113,7 +113,7 @@ Reads `trace.bin` and decodes each PC address into its RISC-V instruction mnemon
 
 ### `compare_traces.py` — Final report generator
 
-Merges `sim_log.txt` (cycle costs) with `trace_dump.txt` (instruction names) and produces `compare_result.txt` with per-instruction cycle costs and a per-instruction-type average summary.
+Merges `log/sim_log.txt` (cycle costs) with `log/trace_dump.txt` (instruction names) and produces `log/compare_result.txt` with per-instruction cycle costs and a per-instruction-type average summary.
 
 ```bash
 python3 compare_traces.py
@@ -162,9 +162,10 @@ serv_project/
   bin_read.py               # trace.bin viewer
   firmware.elf              # compiled ELF (generated)
   firmware.hex              # hex for $readmemh (generated)
-  sim_log.txt               # per-instruction cycle log (generated)
-  trace_dump.txt            # PC → instruction mapping (generated)
-  compare_result.txt        # final merged report (generated)
+  log/                      # all generated log files
+    sim_log.txt             #   per-instruction cycle log
+    trace_dump.txt          #   PC → instruction mapping
+    compare_result.txt      #   final merged report
   ../Codespace/SERV_codespace/
     popcount.c              # example firmware source
     startup.S               # boot code (_start, UART, halt)
