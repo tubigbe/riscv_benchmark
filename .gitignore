@@ -8,6 +8,7 @@ firmware.*
 # ── Simulation output ──
 trace.bin
 trace.vcd
+trace_dump.txt
 cps
 
 # ── Python ──
@@ -17,6 +18,9 @@ __pycache__/
 # ── Backup files ──
 *.bak
 *~
+
+# ── OS / editor ──
+*.deb
 
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
@@ -28,3 +32,4 @@ serv_project/build/
 ibex_project/
 Codespace/Ibex_codespace/
 Codespace/backup_files/
+tools/

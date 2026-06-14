@@ -9,15 +9,23 @@ set -euo pipefail
 # Add / remove entries below. Paths are relative to serv_project/.
 # Supported types: .c .cc .cpp .S .s .asm
 # Duplicates are automatically skipped; missing files trigger a warning.
+#
+# Select firmware with: BENCH=lw ./build.sh --build --run
+#   default  → factorial demo (startup + factorial.c)
+#   lw       → load-word cycle benchmark (startup + test_lw_cycles.s + main.c)
+# ──────────────────────────────────────────────────────────────
+STARTUP="../Codespace/SERV_codespace/startup.S"
+
 if [[ "${BENCH:-}" == "lw" ]]; then
     SOURCES=(
-        "../Codespace/SERV_codespace/startup.S"
-        "../Codespace/SERV_codespace/lw_bench.S"
+        "$STARTUP"
+        "test_lw_cycles.s"
+        "main.c"
     )
 else
     SOURCES=(
-        "../Codespace/SERV_codespace/startup.S"
-        "../Codespace/SERV_codespace/popcount.c"
+        "$STARTUP"
+        "../Codespace/SERV_codespace/factorial.c"
     )
 fi
 # ──────────────────────────────────────────────────────────────
@@ -26,11 +34,14 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ── Toolchain ────────────────────────────────────────────────
-CC=riscv64-unknown-elf-gcc
-CXX=riscv64-unknown-elf-g++
-OBJCOPY=riscv64-unknown-elf-objcopy
-SIZE=riscv64-unknown-elf-size
+# ── Toolchain (prefers env.sh exports, falls back to riscv64 prefix) ──
+_prefix="${RISCV64_PREFIX:-riscv64-unknown-elf-}"
+CC="${CC:-${_prefix}gcc}"
+CXX="${CXX:-${_prefix}g++}"
+OBJCOPY="${OBJCOPY:-${_prefix}objcopy}"
+SIZE="${SIZE:-${_prefix}size}"
+OBJDUMP="${OBJDUMP:-${_prefix}objdump}"
+FUSESOC="${FUSESOC:-fusesoc}"
 
 # ── Compiler flags ───────────────────────────────────────────
 ARCH=rv32i
@@ -179,7 +190,7 @@ do_run() {
     echo ""
 
     timeout "${SIM_TIMEOUT}s" \
-        fusesoc run --target=verilator_tb "$FUSESOC_CORE" \
+        "$FUSESOC" run --target=verilator_tb "$FUSESOC_CORE" \
             --uart_baudrate="$BAUD" \
             --firmware="$SCRIPT_DIR/$HEX" \
             --trace_pc \
