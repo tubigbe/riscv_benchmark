@@ -42,6 +42,7 @@ with open(TRACE_DUMP, "r") as f:
 # ── Parse sim_log.txt and merge ──────────────────────────────
 # Lines look like:  "0x4 -> 0x8 : 36 cycles"
 results = []
+last_mnemonic = "???"
 with open(SIM_LOG, "r") as f:
     for line in f:
         line = line.strip()
@@ -51,7 +52,8 @@ with open(SIM_LOG, "r") as f:
         from_addr = int(m.group(1), 16)
         to_addr   = int(m.group(2), 16)
         cycles    = int(m.group(3))
-        mnemonic  = instr_map.get(from_addr, "???")
+        mnemonic  = instr_map.get(from_addr, last_mnemonic)
+        last_mnemonic = mnemonic
         results.append((from_addr, to_addr, mnemonic, cycles))
 
 # ── Write output ─────────────────────────────────────────────
