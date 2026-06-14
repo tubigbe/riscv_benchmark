@@ -34,3 +34,4 @@ Codespace/Ibex_codespace/
 Codespace/backup_files/
 tools/
 serv_project/log
+.vscode/c_cpp_properties.json
