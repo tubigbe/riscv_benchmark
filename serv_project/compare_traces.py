@@ -48,6 +48,7 @@ with open(TRACE_DUMP, "r") as f:
 # When a ??? entry's from_addr == prev to_addr, merge them
 # so the combined cycle cost is reported under the real instruction.
 results = []
+last_mnemonic = "???"
 with open(SIM_LOG, "r") as f:
     for line in f:
         line = line.strip()

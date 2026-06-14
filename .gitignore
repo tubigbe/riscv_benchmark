@@ -23,6 +23,7 @@ __pycache__/
 
 # ── OS / editor ──
 *.deb
+.vscode/
 
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
