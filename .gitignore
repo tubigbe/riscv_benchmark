@@ -18,6 +18,9 @@ __pycache__/
 *.bak
 *~
 
+# ── OS / editor ──
+*.deb
+
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
 serv_project/modules/
@@ -28,3 +31,5 @@ serv_project/build/
 ibex_project/
 Codespace/Ibex_codespace/
 Codespace/backup_files/
+tools/
+serv_project/log
