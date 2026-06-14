@@ -103,6 +103,56 @@ python3 bin_read.py                       # raw trace.bin viewer
 python3 trace_dump.py                     # full trace with symbol names
 ```
 
+### Step 6 — Cycle cost per instruction
+
+A four-step pipeline that tells you exactly how many cycles each instruction costs on SERV:
+
+```bash
+# Step 1 already done (build.sh --build --run produces trace.bin)
+
+# Step 2: Run Verilator simulation → log/sim_log.txt
+./run_sim.sh
+
+# Step 3: Decode trace.bin → log/trace_dump.txt
+python3 trace_dump.py
+
+# Step 4: Merge logs → log/compare_result.txt
+python3 compare_traces.py
+```
+
+Output (`log/compare_result.txt`):
+```
+#         PC     Next PC  Instr     Cycles
+  0x00000000  0x00000004  lui           36
+  0x00000004  0x00000008  lui           36
+  0x0000000c  0x00000010  sb            70
+  ...
+
+# ── Summary ──────────────────────────────
+# Instructions : 20987
+# Total cycles : 1355310
+# Avg cycles   : 64.6
+# Min cycles   : 36
+# Max cycles   : 99
+
+# ── Average cycle cost per instruction ──
+# Instr     Count      Avg    Min    Max
+  bnez       1544     68.0     68     68
+  nop        2600     36.0     36     36
+  sb         1345     68.9     36     70
+  srli       1424     69.0     69     69
+  ...
+```
+
+**Pipeline overview:**
+
+| Step | Script | Reads | Produces |
+|------|--------|-------|----------|
+| 1 | `build.sh` | C/ASM sources | `firmware.hex`, `trace.bin` |
+| 2 | `run_sim.sh` | `firmware.hex` | `log/sim_log.txt` |
+| 3 | `trace_dump.py` | `trace.bin` | `log/trace_dump.txt` |
+| 4 | `compare_traces.py` | `log/sim_log.txt` + `log/trace_dump.txt` | `log/compare_result.txt` |
+
 ---
 
 ## Prerequisites
@@ -139,6 +189,9 @@ riscv_benchmark/
 │
 ├── serv_project/
 │   ├── build.sh                      # build firmware & run simulation
+│   ├── run_sim.sh                    # Verilator cycle-cost simulation
+│   ├── sim_main.cpp                  # custom Verilator testbench
+│   ├── compare_traces.py             # merge logs → per-instruction report
 │   ├── cycle_counter.sh              # cycle counting for main()
 │   ├── address_capture.sh            # display function PC addresses
 │   ├── instr_counter.sh              # instruction histogram
@@ -147,6 +200,10 @@ riscv_benchmark/
 │   ├── bnez_counter.sh               # instruction address lookup
 │   ├── firmware.elf                  # compiled ELF (generated)
 │   ├── firmware.hex                  # hex for $readmemh (generated)
+│   ├── log/                          # all generated log files
+│   │   ├── sim_log.txt               #   per-instruction cycle log
+│   │   ├── trace_dump.txt            #   PC → instruction mapping
+│   │   └── compare_result.txt        #   final merged report
 │   └── fusesoc_libraries/            # git submodules
 │       ├── serv/                     #   SERV CPU core
 │       ├── mdu/                      #   Multiply/Divide Unit
@@ -225,11 +282,31 @@ python3 bin_read.py path/to/trace.bin 100       # custom file + word count
 
 ### `trace_dump.py` — Full trace with symbols
 
-Converts `trace.bin` into a human-readable text file with symbol resolution via `objdump`.
+Converts `trace.bin` into a human-readable text file with symbol resolution via `objdump`. Writes to `log/trace_dump.txt`.
 
 ```bash
 python3 trace_dump.py                           # auto-detect paths
 python3 trace_dump.py trace.bin firmware.elf output.txt
+```
+
+### `run_sim.sh` — Cycle-cost Verilator simulation
+
+Builds and runs the custom Verilator testbench (`sim_main.cpp`), logging every PC transition with its cycle cost to `log/sim_log.txt`.
+
+| Flag | Action |
+|------|--------|
+| *(no args)* | Clean + build + run |
+| `--build` | Build only |
+| `--run` | Run only |
+| `--clean` | Remove build artifacts |
+| `--firmware=FILE` | Use a different firmware hex |
+
+### `compare_traces.py` — Cycle cost per instruction report
+
+Merges `log/sim_log.txt` (cycle costs) with `log/trace_dump.txt` (instruction names) and produces `log/compare_result.txt` with per-instruction cycle costs and a per-instruction-type average summary.
+
+```bash
+python3 compare_traces.py
 ```
 
 ### `bnez_counter.sh` — Instruction address lookup
