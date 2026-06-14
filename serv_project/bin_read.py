@@ -6,6 +6,8 @@
 # =================================================================
 import os
 import struct
+import sys
+from pathlib import Path
 
 def read_trace_bin(file_path, show_words=40):
     """
@@ -46,6 +48,13 @@ def read_trace_bin(file_path, show_words=40):
             word_idx += 1
 
 if __name__ == "__main__":
-    TARGET_BIN = "~/riscv_benchmark/serv_project/build/award-winning_serv_servant_1.4.0/verilator_tb/trace.bin"
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    DEFAULT_BIN = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
 
-    read_trace_bin(TARGET_BIN, show_words=50)
+    if len(sys.argv) > 1:
+        TARGET_BIN = sys.argv[1]
+    else:
+        TARGET_BIN = str(DEFAULT_BIN)
+
+    show = int(sys.argv[2]) if len(sys.argv) > 2 else 50
+    read_trace_bin(TARGET_BIN, show_words=show)
