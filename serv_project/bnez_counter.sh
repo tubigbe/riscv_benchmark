@@ -6,7 +6,7 @@
 # =================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELF_FILE="$SCRIPT_DIR/firmware.elf"
-OBJDUMP=riscv64-unknown-elf-objdump
+OBJDUMP="${OBJDUMP:-riscv64-unknown-elf-objdump}"
 
 # ── Args ─────────────────────────────────────────────────────
 INST="${1:-bnez}"        # instruction mnemonic to find (default: bnez)
