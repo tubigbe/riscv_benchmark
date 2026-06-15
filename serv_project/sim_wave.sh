@@ -38,13 +38,16 @@ cd "$SCRIPT_DIR"
 
 # ── Parse optional firmware argument ─────────────────────────
 FIRMWARE_ARG=""
+DO_CLEAR=false
 for arg in "$@"; do
     case "$arg" in
         --firmware=*) FIRMWARE_ARG="--firmware=${arg#*=}" ;;
+        --clear)      DO_CLEAR=true ;;
         -h|--help)
-            echo "Usage: $0 [--firmware=FILE]"
+            echo "Usage: $0 [--firmware=FILE] [--clear]"
             echo ""
             echo "  --firmware=FILE   Specify a .hex firmware file (default: firmware.hex)"
+            echo "  --clear           Remove log files and VCD"
             echo ""
             echo "This script builds Verilator with VCD tracing, runs the simulation,"
             echo "and opens the waveform in GTKWave."
@@ -58,6 +61,36 @@ for arg in "$@"; do
 done
 
 VCD_FILE="log/sim_wave.vcd"
+
+# ── Clear logs if requested ──────────────────────────────────
+if $DO_CLEAR; then
+    echo "════════════════════════════════════════"
+    echo "  CLEAR LOGS"
+    echo "════════════════════════════════════════"
+    
+    FILES_TO_DELETE=(
+        "log/sim_log.txt"
+        "log/trace_dump.txt"
+        "log/compare_result.txt"
+        "log/sim_wave.vcd"
+    )
+    
+    DELETED=0
+    for file in "${FILES_TO_DELETE[@]}"; do
+        if [[ -f "$file" ]]; then
+            rm -f "$file"
+            echo "  Removed: $file"
+            DELETED=$((DELETED + 1))
+        fi
+    done
+    
+    if [[ $DELETED -eq 0 ]]; then
+        echo "  No log files to remove."
+    else
+        echo "  Removed $DELETED file(s)."
+    fi
+    exit 0
+fi
 
 # ── Step 1/2: Clean + Build ──────────────────────────────────
 echo "╔══════════════════════════════════════════════╗"
