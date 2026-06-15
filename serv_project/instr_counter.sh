@@ -6,10 +6,12 @@
 #
 # Usage:
 #   ./instr_counter.sh [firmware.elf] [start_label] [end_label]
+#   ./instr_counter.sh --clear
 #
 # When labels are given and both exist, only instructions between
 # start_label (inclusive) and end_label (exclusive) are counted.
 # Otherwise falls back to counting the entire ELF.
+# Use --clear to remove the generated log file.
 #
 # Output: log/instr_count.log
 # =================================================================
@@ -17,6 +19,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${SCRIPT_DIR}/log"
+LOG_FILE="${LOG_DIR}/instr_count.log"
+
+# ── Handle --clear ─────────────────────────────────────────
+if [[ "${1:-}" == "--clear" ]]; then
+    if [[ -f "$LOG_FILE" ]]; then
+        rm -f "$LOG_FILE"
+        echo "Removed: $LOG_FILE"
+    else
+        echo "No log file to remove."
+    fi
+    exit 0
+fi
 
 ELF_FILE="${1:-$SCRIPT_DIR/firmware.elf}"
 START_LABEL="${2:-}"
@@ -29,7 +43,6 @@ if [[ ! -f "$ELF_FILE" ]]; then
 fi
 
 mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/instr_count.log"
 
 $OBJDUMP -d "$ELF_FILE" | awk -v elf="$ELF_FILE" \
                                -v start="$START_LABEL" \

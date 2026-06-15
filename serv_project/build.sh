@@ -19,7 +19,7 @@
 #    ./build.sh --build               Compile firmware only
 #    ./build.sh --run                 Run simulation (firmware must exist)
 #    ./build.sh --build --run         Compile then simulate
-#    ./build.sh --clean               Remove build artifacts
+#    ./build.sh --clear               Remove build artifacts
 #    BENCH=lw ./build.sh --build --run   Use load-word benchmark sources
 #
 #  Inputs (sources, configured at top of this script):
@@ -234,7 +234,7 @@ do_run() {
 # ══════════════════════════════════════════════════════════════
 #  CLEAN: Remove build artifacts
 # ══════════════════════════════════════════════════════════════
-do_clean() {
+do_clear() {
     info "Cleaning build artifacts..."
     rm -f "$ELF" "$BIN" "$HEX" build_*.o "$TRACE_DIR/trace.bin" "$TRACE_DIR/trace.vcd"
     ok "Removed: $ELF / $BIN / $HEX / build_*.o / trace.*"
@@ -248,7 +248,7 @@ usage() {
     echo ""
     echo "  --build   Compile firmware (deduplicates sources automatically)"
     echo "  --run     Launch Verilator simulation"
-    echo "  --clean   Remove all build artifacts"
+    echo "  --clear   Remove all build artifacts"
     echo ""
     echo "Edit the SOURCES array at the top of this script to add/remove files."
     echo ""
@@ -270,7 +270,7 @@ for arg in "$@"; do
     case "$arg" in
         --build)  DO_BUILD=true ;;
         --run)    DO_RUN=true ;;
-        --clean)  do_clean; exit 0 ;;
+        --clear)  do_clear; exit 0 ;;
         --help|-h) usage; exit 0 ;;
         *) fail "Unknown argument: $arg (use --help for usage)" ;;
     esac
