@@ -19,8 +19,8 @@ import sys
 import os
 from pathlib import Path
 
-# ── Default paths (relative to this script) ──────────────────
-SCRIPT_DIR = Path(__file__).resolve().parent
+# ── Default paths (relative to project root) ────────────────
+SCRIPT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_TRACE = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
 DEFAULT_ELF   = SCRIPT_DIR / "firmware.elf"
 DEFAULT_OUT   = SCRIPT_DIR / "log" / "trace_dump.txt"

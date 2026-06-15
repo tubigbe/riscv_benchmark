@@ -92,14 +92,14 @@ VERILOG_SOURCES=(
     fusesoc_libraries/serv/bench/uart_decoder.v
 )
 
-CPP_SOURCES=(sim_main.cpp)
+CPP_SOURCES=(scripts/sim_main.cpp)
 
 # ══════════════════════════════════════════════════════════════
 #  CLEAN
 # ══════════════════════════════════════════════════════════════
 if $DO_CLEAN; then
     echo "════════════════════════════════════════"
-    echo "  [1/3] CLEAN"
+    echo "  [1/4] CLEAN"
     echo "════════════════════════════════════════"
     rm -rf "$BUILD_DIR"
     echo "  Removed ${BUILD_DIR}/"
@@ -110,7 +110,7 @@ fi
 # ══════════════════════════════════════════════════════════════
 if $DO_BUILD; then
     echo "════════════════════════════════════════"
-    echo "  [2/3] BUILD"
+    echo "  [2/4] BUILD"
     echo "════════════════════════════════════════"
 
     # Step 1: Verilator → generate C++ model
@@ -147,11 +147,30 @@ if $DO_RUN; then
     fi
 
     echo "════════════════════════════════════════"
-    echo "  [3/3] RUN"
+    echo "  [3/4] SIMULATE"
     echo "════════════════════════════════════════"
     echo "  Firmware : ${FIRMWARE}"
     echo "  Binary   : ${BINARY}"
     echo "  VCD      : log/sim_wave.vcd"
     echo "════════════════════════════════════════"
     "$BINARY" "+firmware=${FIRMWARE}" "+vcd=1"
+
+    # ── Post-processing ──────────────────────────────────────
+    echo "════════════════════════════════════════"
+    echo "  [4/4] POST-PROCESS"
+    echo "════════════════════════════════════════"
+
+    echo "  [trace_dump] Processing trace.bin..."
+    if ! python3 scripts/trace_dump.py; then
+        echo "  [WARN] trace_dump.py failed (trace.bin may not exist)"
+    fi
+
+    echo "  [compare] Merging traces -> log/compare_result.txt"
+    if ! python3 scripts/compare_traces.py; then
+        echo "  [WARN] compare_traces.py failed"
+    fi
+
+    echo "════════════════════════════════════════"
+    echo "  Done! Logs in log/"
+    echo "════════════════════════════════════════"
 fi
