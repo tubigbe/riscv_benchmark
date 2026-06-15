@@ -56,6 +56,7 @@ FIRMWARE="firmware.hex"
 DO_CLEAN=false
 DO_BUILD=false
 DO_RUN=false
+DO_CLEAR=false
 
 # If no args at all → do everything
 if [[ $# -eq 0 ]]; then
@@ -69,14 +70,16 @@ for arg in "$@"; do
         --clean)    DO_CLEAN=true ;;
         --build)    DO_BUILD=true ;;
         --run)      DO_RUN=true ;;
+        --clear)    DO_CLEAR=true ;;
         --firmware=*) FIRMWARE="${arg#*=}" ;;
         -h|--help)
-            echo "Usage: $0 [--clean] [--build] [--run] [--firmware=FILE]"
+            echo "Usage: $0 [--clean] [--build] [--run] [--clear] [--firmware=FILE]"
             echo ""
             echo "  No args       → clean + build + run (default)"
             echo "  --clean       → remove build artifacts only"
             echo "  --build       → build without running"
             echo "  --run         → run without rebuilding"
+            echo "  --clear       → remove log files and VCD"
             echo "  --firmware=X  → use X as firmware (default: firmware.hex)"
             exit 0
             ;;
@@ -122,6 +125,38 @@ VERILOG_SOURCES=(
 )
 
 CPP_SOURCES=(scripts/sim_main.cpp)
+
+# ══════════════════════════════════════════════════════════════
+#  CLEAR LOGS
+# ══════════════════════════════════════════════════════════════
+if $DO_CLEAR; then
+    echo "════════════════════════════════════════"
+    echo "  CLEAR LOGS"
+    echo "════════════════════════════════════════"
+    
+    FILES_TO_DELETE=(
+        "log/sim_log.txt"
+        "log/trace_dump.txt"
+        "log/compare_result.txt"
+        "log/sim_wave.vcd"
+    )
+    
+    DELETED=0
+    for file in "${FILES_TO_DELETE[@]}"; do
+        if [[ -f "$file" ]]; then
+            rm -f "$file"
+            echo "  Removed: $file"
+            DELETED=$((DELETED + 1))
+        fi
+    done
+    
+    if [[ $DELETED -eq 0 ]]; then
+        echo "  No log files to remove."
+    else
+        echo "  Removed $DELETED file(s)."
+    fi
+    exit 0
+fi
 
 # ══════════════════════════════════════════════════════════════
 #  CLEAN
