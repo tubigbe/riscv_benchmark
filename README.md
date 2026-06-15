@@ -14,7 +14,6 @@ serv_project/
 ├── run_sim.sh            # Verilator simulation pipeline (build + simulate + analyze)
 ├── instr_counter.sh      # Static instruction count from ELF disassembly
 ├── sim_wave.sh           # Build + simulate + open GTKWave waveform viewer
-├── main.c / test_lw_cycles.s   # Example firmware sources
 ├── sim_main.cpp          # Verilator C++ testbench (PC monitor)
 │
 ├── scripts/              # Post-processing scripts (called by run_sim.sh)
