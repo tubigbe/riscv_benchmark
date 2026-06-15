@@ -102,7 +102,7 @@ breakdown to `log/instr_count.log`.
 |------|-------------|
 | `--build` | Compile firmware from sources listed in the script header |
 | `--run` | Launch FuseSoC-driven Verilator simulation (produces `trace.bin`) |
-| `--clean` | Remove `firmware.elf`, `firmware.bin`, `firmware.hex` |
+| `--clear` | Remove `firmware.elf`, `firmware.bin`, `firmware.hex` |
 
 **Environment variables:**
 
@@ -128,7 +128,7 @@ Runs the full 4-step simulation pipeline:
 | Flag | Description |
 |------|-------------|
 | *(no args)* | Clean + build + simulate (default) |
-| `--clean` | Remove `obj_dir_custom/` only |
+| `--clear` | Remove `obj_dir_custom/` only |
 | `--build` | Build Verilator model only |
 | `--run` | Run simulation only (model must exist) |
 | `--firmware=FILE` | Use a different `.hex` firmware file |
