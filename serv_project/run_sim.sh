@@ -1,14 +1,43 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════
-#  SERV Simulation Build & Run Script
-#  Usage: ./run_sim.sh [--clean] [--build] [--run] [--firmware=FILE]
+# ═══════════════════════════════════════════════════════════════════════
+#  SERV Verilator Simulation Pipeline
+# ═══════════════════════════════════════════════════════════════════════
 #
-#  Default (no args):  clean + build + run
-#  --build only:       build without running
-#  --run only:         run without rebuilding
-#  --clean only:       remove build artifacts
-#  --firmware=FILE:    specify a different .hex firmware file
-# ═══════════════════════════════════════════════════════════════
+#  Purpose:
+#    Builds a Verilator C++ model of the SERV SoC from RTL sources,
+#    runs the simulation with a firmware.hex image, then post-processes
+#    the results into analysis logs. This is the main simulation entry
+#    point that ties together Verilator, sim_main.cpp, and the Python
+#    trace-analysis scripts.
+#
+#  Tools used:
+#    - verilator              Compile Verilog RTL → C++ simulation model
+#    - make / g++             Build the C++ simulation executable
+#    - Vservant_sim (built)   The compiled SERV simulation binary
+#    - python3 trace_dump.py  Convert trace.bin → human-readable trace
+#    - python3 compare_traces.py  Merge sim log + trace into final report
+#
+#  Usage:
+#    ./run_sim.sh                              Clean + build + simulate
+#    ./run_sim.sh --build                      Build Verilator model only
+#    ./run_sim.sh --run                        Run simulation only
+#    ./run_sim.sh --build --run                Build then simulate
+#    ./run_sim.sh --firmware=my.hex            Use a different firmware
+#
+#  Pipeline steps:
+#    [1/4] CLEAN        Remove obj_dir_custom/
+#    [2/4] BUILD        Verilator + g++ → Vservant_sim binary
+#    [3/4] SIMULATE     Run simulation, generates sim_log.txt + sim_wave.vcd
+#    [4/4] POST-PROCESS trace_dump.py → trace_dump.txt
+#                        compare_traces.py → compare_result.txt
+#
+#  Outputs (all in log/):
+#    - sim_log.txt          Per-instruction cycle cost from the simulation
+#    - sim_wave.vcd         VCD waveform dump (open with GTKWave)
+#    - trace_dump.txt       Symbol-resolved PC trace from trace.bin
+#    - compare_result.txt   Merged trace with per-instruction cycle info
+#
+# ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
 # ── Project root ─────────────────────────────────────────────
@@ -92,14 +121,14 @@ VERILOG_SOURCES=(
     fusesoc_libraries/serv/bench/uart_decoder.v
 )
 
-CPP_SOURCES=(sim_main.cpp)
+CPP_SOURCES=(scripts/sim_main.cpp)
 
 # ══════════════════════════════════════════════════════════════
 #  CLEAN
 # ══════════════════════════════════════════════════════════════
 if $DO_CLEAN; then
     echo "════════════════════════════════════════"
-    echo "  [1/3] CLEAN"
+    echo "  [1/4] CLEAN"
     echo "════════════════════════════════════════"
     rm -rf "$BUILD_DIR"
     echo "  Removed ${BUILD_DIR}/"
@@ -110,7 +139,7 @@ fi
 # ══════════════════════════════════════════════════════════════
 if $DO_BUILD; then
     echo "════════════════════════════════════════"
-    echo "  [2/3] BUILD"
+    echo "  [2/4] BUILD"
     echo "════════════════════════════════════════"
 
     # Step 1: Verilator → generate C++ model
@@ -147,11 +176,30 @@ if $DO_RUN; then
     fi
 
     echo "════════════════════════════════════════"
-    echo "  [3/3] RUN"
+    echo "  [3/4] SIMULATE"
     echo "════════════════════════════════════════"
     echo "  Firmware : ${FIRMWARE}"
     echo "  Binary   : ${BINARY}"
     echo "  VCD      : log/sim_wave.vcd"
     echo "════════════════════════════════════════"
     "$BINARY" "+firmware=${FIRMWARE}" "+vcd=1"
+
+    # ── Post-processing ──────────────────────────────────────
+    echo "════════════════════════════════════════"
+    echo "  [4/4] POST-PROCESS"
+    echo "════════════════════════════════════════"
+
+    echo "  [trace_dump] Processing trace.bin..."
+    if ! python3 scripts/trace_dump.py; then
+        echo "  [WARN] trace_dump.py failed (trace.bin may not exist)"
+    fi
+
+    echo "  [compare] Merging traces -> log/compare_result.txt"
+    if ! python3 scripts/compare_traces.py; then
+        echo "  [WARN] compare_traces.py failed"
+    fi
+
+    echo "════════════════════════════════════════"
+    echo "  Done! Logs in log/"
+    echo "════════════════════════════════════════"
 fi

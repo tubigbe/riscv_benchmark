@@ -19,7 +19,7 @@ import re
 import sys
 
 # ── Locate files ─────────────────────────────────────────────
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR    = os.path.join(SCRIPT_DIR, "log")
 SIM_LOG    = os.path.join(LOG_DIR, "sim_log.txt")
 TRACE_DUMP = os.path.join(LOG_DIR, "trace_dump.txt")

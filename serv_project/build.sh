@@ -1,8 +1,38 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════
-#  SERV Standalone Build Script
-#  Usage: ./build.sh [--build] [--run] [--clean]
-# ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
+#  SERV Firmware Build & Simulate Script
+# ═══════════════════════════════════════════════════════════════════════
+#
+#  Purpose:
+#    Compiles RISC-V firmware from C/assembly source files, links it
+#    with the SERV startup code, then optionally launches a FuseSoC-
+#    driven Verilator simulation to run the firmware on the SERV core.
+#
+#  Tools used:
+#    - riscv64-unknown-elf-gcc   Compile & link RISC-V rv32i firmware
+#    - riscv64-unknown-elf-objcopy  ELF → raw binary conversion
+#    - riscv64-unknown-elf-size     Print firmware section sizes
+#    - python3 (makehex.py)         Binary → Verilog hex format
+#    - fusesoc                      Build & run Verilator simulation
+#
+#  Usage:
+#    ./build.sh --build               Compile firmware only
+#    ./build.sh --run                 Run simulation (firmware must exist)
+#    ./build.sh --build --run         Compile then simulate
+#    ./build.sh --clean               Remove build artifacts
+#    BENCH=lw ./build.sh --build --run   Use load-word benchmark sources
+#
+#  Inputs (sources, configured at top of this script):
+#    - startup.S                 RISC-V boot code (_start entry point)
+#    - factorial.c / test_lw_cycles.s / main.c   Application code
+#
+#  Outputs (generated files in serv_project/):
+#    - firmware.elf              Linked ELF binary
+#    - firmware.bin              Raw binary (objcopy)
+#    - firmware.hex              Verilog hex image (loaded by simulation RAM)
+#    - build/…/trace.bin         PC trace from simulation (if --run)
+#
+# ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
 # ── EDIT THIS: source file list ──────────────────────────────

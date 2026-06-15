@@ -1,14 +1,36 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════
-#  SERV Simulation + VCD Waveform Viewer
-#  Usage: ./sim_wave.sh [--firmware=FILE]
+# ═══════════════════════════════════════════════════════════════════════
+#  SERV Waveform Viewer
+# ═══════════════════════════════════════════════════════════════════════
+#
+#  Purpose:
+#    Convenience wrapper that rebuilds the simulation, runs it, and
+#    automatically opens the resulting VCD waveform in GTKWave. Useful
+#    for signal-level debugging of the SERV CPU and SoC peripherals.
+#
+#  Tools used:
+#    - run_sim.sh --clean --build   Clean build the Verilator model
+#    - run_sim.sh --run             Run simulation (generates VCD)
+#    - gtkwave                      Open waveform viewer (GUI)
+#
+#  Usage:
+#    ./sim_wave.sh                     Build, run, and view waveform
+#    ./sim_wave.sh --firmware=my.hex   Use a different firmware file
 #
 #  Steps:
-#    1. Clean old build artifacts
-#    2. Build Verilator model with --trace (VCD support)
-#    3. Run simulation to generate log/sim_wave.vcd
-#    4. Open waveform with GTKWave
-# ═══════════════════════════════════════════════════════════════
+#    1-2. Clean old artifacts & build Verilator model with VCD tracing
+#    3.   Run simulation → generates log/sim_wave.vcd
+#    4.   Open log/sim_wave.vcd in GTKWave
+#
+#  Outputs:
+#    - log/sim_wave.vcd   VCD waveform file (viewable in GTKWave)
+#    - log/sim_log.txt    Simulation log (from run_sim.sh post-process)
+#    - log/compare_result.txt  Merged trace analysis (from run_sim.sh)
+#
+#  Prerequisite:
+#    GTKWave must be installed:  sudo apt install gtkwave
+#
+# ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
