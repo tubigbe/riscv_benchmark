@@ -21,6 +21,7 @@
 #    ./run_sim.sh                              Clean + build + simulate
 #    ./run_sim.sh --build                      Build Verilator model only
 #    ./run_sim.sh --run                        Run simulation only
+#    ./run_sim.sh --clear                      Clear all the log files
 #    ./run_sim.sh --build --run                Build then simulate
 #    ./run_sim.sh --firmware=my.hex            Use a different firmware
 #
