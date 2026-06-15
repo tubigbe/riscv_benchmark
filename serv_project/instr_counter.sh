@@ -1,31 +1,18 @@
 #!/bin/bash
-# ═══════════════════════════════════════════════════════════════════════
-#  SERV Static Instruction Counter
-# ═══════════════════════════════════════════════════════════════════════
+# =================================================================
+# Static instruction counter for firmware.elf
+# Counts every unique mnemonic across ALL functions/sections,
+# or between two user-defined labels if both exist in the ELF.
 #
-#  Purpose:
-#    Parses the disassembly of a compiled RISC-V ELF file and counts
-#    every unique instruction mnemonic. Can count the entire binary or
-#    only the instructions between two user-specified function labels.
+# Usage:
+#   ./instr_counter.sh [firmware.elf] [start_label] [end_label]
 #
-#  Tools used:
-#    - riscv64-unknown-elf-objdump   Disassemble the ELF file
-#    - awk                           Parse disassembly, count mnemonics
+# When labels are given and both exist, only instructions between
+# start_label (inclusive) and end_label (exclusive) are counted.
+# Otherwise falls back to counting the entire ELF.
 #
-#  Usage:
-#    ./instr_counter.sh                            Count all instructions
-#    ./instr_counter.sh firmware.elf               Count specific ELF
-#    ./instr_counter.sh firmware.elf _start main   Count between labels
-#
-#  When both labels exist in the ELF, only instructions between
-#  start_label (inclusive) and end_label (exclusive) are counted.
-#  If labels are not found or not provided, the full ELF is counted.
-#
-#  Output:
-#    - log/instr_count.log   Per-mnemonic instruction breakdown
-#    - Terminal               Confirmation message with log path
-#
-# ═══════════════════════════════════════════════════════════════════════
+# Output: log/instr_count.log
+# =================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
