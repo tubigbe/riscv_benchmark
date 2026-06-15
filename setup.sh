@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 #  riscv_benchmark — one-time setup script
-#  Run this after cloning the repository.
+#  Run this after cloning the repository or you miss mdu/fusesoc_cores/serv again
 #
 #  Usage:  ./setup.sh
 # ============================================================
