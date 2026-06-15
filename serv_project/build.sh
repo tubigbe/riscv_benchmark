@@ -244,7 +244,7 @@ do_clear() {
 #  Main: parse command-line arguments
 # ══════════════════════════════════════════════════════════════
 usage() {
-    echo "Usage: $0 [--build] [--run] [--clean]"
+    echo "Usage: $0 [--build] [--run] [--clear]"
     echo ""
     echo "  --build   Compile firmware (deduplicates sources automatically)"
     echo "  --run     Launch Verilator simulation"
@@ -255,7 +255,7 @@ usage() {
     echo "Examples:"
     echo "  $0 --build          # compile only"
     echo "  $0 --build --run    # compile + simulate"
-    echo "  $0 --clean          # clean artifacts"
+    echo "  $0 --clear          # clear artifacts"
 }
 
 if [[ $# -eq 0 ]]; then
