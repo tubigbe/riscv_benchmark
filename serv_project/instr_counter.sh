@@ -17,7 +17,7 @@ if [[ ! -f "$ELF_FILE" ]]; then
     exit 1
 fi
 
-$OBJDUMP -d "$ELF_FILE" | awk -v func="$FUNC" '
+$OBJDUMP -d "$ELF_FILE" | awk -v fn="$FUNC" '
 /<'"$FUNC"'>:/ { flag = 1; next }
 flag {
     # Only count lines with hex address + valid instruction
@@ -30,7 +30,7 @@ flag {
 END {
     total = 0
     for (ins in inst_count) total += inst_count[ins]
-    print "[Static] <" func "> instruction breakdown (" total " total):"
+    print "[Static] <" fn "> instruction breakdown (" total " total):"
     print "========================================="
     for (ins in inst_count) {
         printf "%-10s : %d\n", ins, inst_count[ins]
