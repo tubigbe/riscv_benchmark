@@ -4,7 +4,7 @@ int main(void){
     int A = 10;
     const int B = 1;
 
-    while (A != B){
+    if (A != B){
         return B;
     }
 
