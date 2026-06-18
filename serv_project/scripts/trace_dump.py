@@ -6,6 +6,9 @@ Reads the raw 32-bit-integer binary trace and writes one line per cycle:
     [index]  0xXXXXXXXX  <symbol>       (if symbol resolved)
     [index]  0xXXXXXXXX                  (otherwise)
 
+Also generates a pure hex dump file (firmware.dump) at the project root,
+containing only raw PC addresses without any symbols or processing.
+
 Optionally resolves PCs to symbols via $OBJDUMP (set by Codespace/env.sh).
 
 Usage:
@@ -21,9 +24,10 @@ from pathlib import Path
 
 # ── Default paths (relative to project root) ────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_TRACE = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
-DEFAULT_ELF   = SCRIPT_DIR / "firmware.elf"
-DEFAULT_OUT   = SCRIPT_DIR / "log" / "trace_dump.txt"
+DEFAULT_TRACE  = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
+DEFAULT_ELF    = SCRIPT_DIR / "firmware.elf"
+DEFAULT_OUT    = SCRIPT_DIR / "log" / "trace_dump.txt"
+DEFAULT_DUMP   = SCRIPT_DIR / "firmware.dump"
 
 # Ensure log directory exists
 os.makedirs(SCRIPT_DIR / "log", exist_ok=True)
@@ -105,6 +109,17 @@ def write_dump(pcs: list[int], symbols: dict[int, str], out: Path):
     return out
 
 
+def write_pure_dump(pcs: list[int], out: Path):
+    """
+    Write a pure hex dump file with raw PC addresses only.
+    No symbols, no index numbers, no comments — just clean hex values.
+    """
+    with open(out, "w") as f:
+        for pc in pcs:
+            f.write(f"0x{pc:08x}\n")
+    return out
+
+
 def main():
     trace_path, elf_path, out_path = parse_args()
 
@@ -131,6 +146,10 @@ def main():
     # Write output
     out = write_dump(pcs, symbols, out_path)
     print(f"  Written to {out}")
+
+    # Write pure hex dump
+    dump = write_pure_dump(pcs, DEFAULT_DUMP)
+    print(f"  Pure dump: {dump}")
 
 
 if __name__ == "__main__":
