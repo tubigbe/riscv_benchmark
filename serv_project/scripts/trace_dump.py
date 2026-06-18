@@ -109,15 +109,25 @@ def write_dump(pcs: list[int], symbols: dict[int, str], out: Path):
     return out
 
 
-def write_pure_dump(pcs: list[int], out: Path):
+def write_pure_dump(elf: Path, out: Path):
     """
-    Write a pure hex dump file with raw PC addresses only.
-    No symbols, no index numbers, no comments — just clean hex values.
+    Generate a pure disassembly dump using riscv64-unknown-elf-objdump.
+    Produces a clean, unmodified dump with -M no-aliases,numeric.
     """
-    with open(out, "w") as f:
-        for pc in pcs:
-            f.write(f"0x{pc:08x}\n")
-    return out
+    try:
+        result = subprocess.run(
+            [OBJDUMP, "-d", "-M", "no-aliases,numeric", str(elf)],
+            capture_output=True, text=True, timeout=60,
+        )
+        with open(out, "w") as f:
+            f.write(result.stdout)
+        return out
+    except FileNotFoundError:
+        print(f"WARNING: {OBJDUMP} not found, skipping pure dump", file=sys.stderr)
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"WARNING: objdump timed out, skipping pure dump", file=sys.stderr)
+        return None
 
 
 def main():
@@ -147,9 +157,10 @@ def main():
     out = write_dump(pcs, symbols, out_path)
     print(f"  Written to {out}")
 
-    # Write pure hex dump
-    dump = write_pure_dump(pcs, DEFAULT_DUMP)
-    print(f"  Pure dump: {dump}")
+    # Write pure disassembly dump
+    dump = write_pure_dump(elf_path, DEFAULT_DUMP)
+    if dump:
+        print(f"  Pure dump: {dump}")
 
 
 if __name__ == "__main__":
