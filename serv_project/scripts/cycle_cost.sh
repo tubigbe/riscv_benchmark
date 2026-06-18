@@ -9,11 +9,13 @@
 #
 #  Usage:
 #    ./scripts/cycle_cost.sh <start_addr> <end_addr>
+#    ./scripts/cycle_cost.sh --clear
 #
 #  Examples:
 #    ./scripts/cycle_cost.sh 48 6c
 #    ./scripts/cycle_cost.sh 0x48 0x6c
 #    ./scripts/cycle_cost.sh 0x00000048 0x0000006c
+#    ./scripts/cycle_cost.sh --clear
 #
 #  The addresses are user-defined — pass any two addresses that appear
 #  in compare_result.txt. They will be normalized to match the format
@@ -56,6 +58,14 @@ usage() {
     echo "Output: log/cycle_cost_<start>_<end>.txt"
     exit 1
 }
+
+# ── Handle --clear ─────────────────────────────────────────────────────
+if [[ "${1:-}" == "--clear" ]]; then
+    echo "Clearing cycle_cost dump files..."
+    rm -f "$PROJECT_DIR"/log/cycle_cost_*.txt
+    echo "Done. Removed: $PROJECT_DIR/log/cycle_cost_*.txt"
+    exit 0
+fi
 
 [[ $# -ne 2 ]] && usage
 [[ "$1" == "-h" || "$1" == "--help" ]] && usage
@@ -128,6 +138,8 @@ BEGIN {
         found_start = 1
         total_cycles += cycles
         instruction_count++
+        instr_count[instr]++
+        instr_cycles[instr] += cycles
         printf "  \033[32m▶ START\033[0m  %s  %-8s  %d cycles\n", pc, instr, cycles
         printf "  %-14s %-14s %-10s %d\n", pc, next_pc, instr, cycles > dump_file
         next
@@ -139,6 +151,8 @@ BEGIN {
         in_range = 0
         total_cycles += cycles
         instruction_count++
+        instr_count[instr]++
+        instr_cycles[instr] += cycles
         printf "  \033[31m◀ END\033[0m    %s  %-8s  %d cycles\n", pc, instr, cycles
         printf "  %-14s %-14s %-10s %d\n", pc, next_pc, instr, cycles > dump_file
         next
@@ -148,6 +162,8 @@ BEGIN {
     if (in_range) {
         total_cycles += cycles
         instruction_count++
+        instr_count[instr]++
+        instr_cycles[instr] += cycles
         printf "  %-14s %-14s %-10s %d\n", pc, next_pc, instr, cycles
         printf "  %-14s %-14s %-10s %d\n", pc, next_pc, instr, cycles > dump_file
     }
@@ -175,6 +191,21 @@ END {
     if (instruction_count > 0)
         printf "  Average CPI:     %.2f\n", total_cycles / instruction_count
 
+    # ── Instruction breakdown to terminal ─────────────────────────
+    printf "\n\033[1m── Instruction Breakdown ─────────────────────────\033[0m\n"
+    printf "  \033[1m%-10s  %8s  %12s  %10s\033[0m\n", "Instr", "Count", "Total Cycles", "Avg Cycles"
+    printf "  %-10s  %8s  %12s  %10s\n", "----------", "--------", "------------", "----------"
+
+    # Collect and sort instruction names
+    n = asorti(instr_count, sorted)
+    for (i = 1; i <= n; i++) {
+        name = sorted[i]
+        cnt = instr_count[name]
+        cyc = instr_cycles[name]
+        avg = cyc / cnt
+        printf "  %-10s  %8d  %12d  %10.2f\n", name, cnt, cyc, avg
+    }
+
     # ── Summary to dump file ──────────────────────────────────────
     printf "#\n" > dump_file
     printf "# Summary:\n" > dump_file
@@ -182,6 +213,20 @@ END {
     printf "#   Instructions:    %d\n", instruction_count > dump_file
     if (instruction_count > 0)
         printf "#   Average CPI:     %.2f\n", total_cycles / instruction_count > dump_file
+
+    # ── Instruction breakdown to dump file ────────────────────────
+    printf "#\n" > dump_file
+    printf "# Instruction Breakdown:\n" > dump_file
+    printf "# %-10s  %8s  %12s  %10s\n", "Instr", "Count", "Total Cycles", "Avg Cycles" > dump_file
+    printf "# %-10s  %8s  %12s  %10s\n", "----------", "--------", "------------", "----------" > dump_file
+
+    for (i = 1; i <= n; i++) {
+        name = sorted[i]
+        cnt = instr_count[name]
+        cyc = instr_cycles[name]
+        avg = cyc / cnt
+        printf "# %-10s  %8d  %12d  %10.2f\n", name, cnt, cyc, avg > dump_file
+    }
 }
 ' "$COMPARE_FILE"
 
