@@ -21,8 +21,8 @@
 #      - Build failures (marked as FAIL in sweep log)
 #
 #  Output:
-#    log/sweep/sweep_O<level>.log  — sweep results (including FAIL lines)
-#    log/diff/diff_O<level>.log    — diff against B=10 baseline
+#    log/sweep/sweep_O<level>.log       — sweep results (including FAIL lines)
+#    log/diff/consolidated_diff.log      — single consolidated diff report
 #
 #  Usage:
 #    ./scripts/asm_sweep.sh              # run full sweep + diff
@@ -68,8 +68,8 @@ usage() {
     echo "and records instruction types for each combination."
     echo ""
     echo "Output:"
-    echo "  log/sweep/sweep_O<level>.log  — sweep results"
-    echo "  log/diff/diff_O<level>.log    — diff against B=10 baseline"
+    echo "  log/sweep/sweep_O<level>.log       — sweep results"
+    echo "  log/diff/consolidated_diff.log      — consolidated diff report"
     echo ""
     echo "Options:"
     echo "  --clear   Remove all sweep and diff log files"
@@ -125,16 +125,21 @@ extract_types() {
 }
 
 # ── Diff function: compare sweep log against B=10 baseline ────────────
-# Reads a sweep log, compares every B entry against the B=10 baseline.
-# Failed builds (lines containing "FAIL") are flagged in the diff output.
+# Reads a sweep log, compares every B entry against B=10.
+# Writes diff body to a temp file; sets globals for the caller:
+#   DIFF_LEVEL_TOTAL / DIFF_LEVEL_DIFFS / DIFF_LEVEL_FAILS / DIFF_LEVEL_BASELINE
 diff_sweep_log() {
     local sweep_file="$1"
-    local level="$2"
-    local diff_file="$DIFF_DIR/diff_${level}.log"
+    DIFF_TMP_FILE=$(mktemp)
+    local stats_file
+    stats_file=$(mktemp)
 
-    info "Diffing: $sweep_file → $diff_file"
+    DIFF_LEVEL_TOTAL=0
+    DIFF_LEVEL_DIFFS=0
+    DIFF_LEVEL_FAILS=0
+    DIFF_LEVEL_BASELINE=""
 
-    awk -v diff_file="$diff_file" -v baseline_b=10 '
+    awk -v tmp="$DIFF_TMP_FILE" -v stats="$stats_file" -v baseline_b=10 '
     BEGIN {
         baseline_set = 0
         baseline_sorted = ""
@@ -161,11 +166,10 @@ diff_sweep_log() {
         # Detect failed builds
         if (types == "FAIL" || types ~ /FAIL/) {
             n_fails++
-            if (baseline_set) {
-                printf "B=%-4d          BUILD FAILED (baseline B=%d has: %s)\n", b_val, baseline_b, baseline_sorted > diff_file
-            } else {
-                printf "B=%-4d          BUILD FAILED (no baseline yet)\n", b_val > diff_file
-            }
+            if (baseline_set)
+                printf "  B=%-4d          BUILD FAILED (baseline B=%d has: %s)\n", b_val, baseline_b, baseline_sorted > tmp
+            else
+                printf "  B=%-4d          BUILD FAILED (no baseline yet)\n", b_val > tmp
             next
         }
 
@@ -175,8 +179,7 @@ diff_sweep_log() {
             key = tarr[i]
             j = i - 1
             while (j >= 1 && tarr[j] > key) {
-                tarr[j+1] = tarr[j]
-                j--
+                tarr[j+1] = tarr[j]; j--
             }
             tarr[j+1] = key
         }
@@ -190,68 +193,50 @@ diff_sweep_log() {
         if (b_val == baseline_b && !baseline_set) {
             baseline_sorted = sorted
             baseline_set = 1
-            printf "# Diff log: %s\n", diff_file > diff_file
-            printf "# Baseline: B=%d uses: %s\n\n", b_val, sorted > diff_file
             next
         }
 
-        # Compare against baseline (only once baseline is set)
         if (!baseline_set) next
 
+        # Compare against baseline
         if (sorted != baseline_sorted) {
             n_diffs++
-
             nb = split(baseline_sorted, ba, ",")
             nc = split(sorted, ca, ",")
-
-            added = ""
-            removed = ""
+            added = ""; removed = ""
 
             for (c = 1; c <= nc; c++) {
                 found = 0
-                for (p = 1; p <= nb; p++) {
-                    if (ca[c] == ba[p]) { found = 1; break }
-                }
-                if (!found) {
-                    if (added != "") added = added ","
-                    added = added ca[c]
-                }
+                for (p = 1; p <= nb; p++) { if (ca[c] == ba[p]) { found = 1; break } }
+                if (!found) { if (added != "") added = added ","; added = added ca[c] }
             }
-
             for (p = 1; p <= nb; p++) {
                 found = 0
-                for (c = 1; c <= nc; c++) {
-                    if (ba[p] == ca[c]) { found = 1; break }
-                }
-                if (!found) {
-                    if (removed != "") removed = removed ","
-                    removed = removed ba[p]
-                }
+                for (c = 1; c <= nc; c++) { if (ba[p] == ca[c]) { found = 1; break } }
+                if (!found) { if (removed != "") removed = removed ","; removed = removed ba[p] }
             }
 
-            printf "B=%-4d vs B=%-4d", b_val, baseline_b > diff_file
-            if (added != "")   printf "  +%s", added > diff_file
-            if (removed != "") printf "  -%s", removed > diff_file
-            printf "\n" > diff_file
+            printf "  B=%-4d vs B=%-4d", b_val, baseline_b > tmp
+            if (added != "")   printf "  +%s", added > tmp
+            if (removed != "") printf "  -%s", removed > tmp
+            printf "\n" > tmp
         }
     }
 
     END {
-        if (!baseline_set) {
-            printf "# Diff log: %s\n", diff_file > diff_file
-            printf "# WARNING: Baseline B=%d not found or failed — no comparison possible\n", baseline_b > diff_file
-        }
-        printf "\n─────────────────────────────────────────────\n" > diff_file
-        printf "Total B values checked: %d\n", n_total > diff_file
-        printf "Build failures:         %d\n", n_fails > diff_file
-        printf "Instruction diffs:      %d  (vs B=%d baseline)\n", n_diffs, baseline_b > diff_file
-        printf "─────────────────────────────────────────────\n" > diff_file
+        if (!baseline_set)
+            printf "  # WARNING: Baseline B=%d not found or failed\n", baseline_b > tmp
+        # Write stats to a separate file so bash can read them
+        printf "%d\n%d\n%d\n%s\n", n_total, n_diffs, n_fails, baseline_sorted > stats
     }
     ' "$sweep_file"
 
-    local diff_count
-    diff_count=$(grep -c '^B=' "$diff_file" 2>/dev/null || echo "0")
-    ok "Diff done: $diff_count entries → $diff_file"
+    # Read stats back from the stats file (line by line)
+    read -r DIFF_LEVEL_TOTAL  < <(sed -n '1p' "$stats_file")
+    read -r DIFF_LEVEL_DIFFS  < <(sed -n '2p' "$stats_file")
+    read -r DIFF_LEVEL_FAILS  < <(sed -n '3p' "$stats_file")
+    read -r DIFF_LEVEL_BASELINE < <(sed -n '4p' "$stats_file")
+    rm -f "$stats_file"
 }
 
 # ── Counters ───────────────────────────────────────────────────────────
@@ -325,17 +310,91 @@ for opt in "${OPT_LEVELS[@]}"; do
     done
 
     ok "$opt: ${OPT_OK}/$((B_END - B_START + 1)) succeeded, ${OPT_FAIL} failed"
-
-    # Run diff against B=10 baseline for this optimization level
-    diff_sweep_log "$SWEEP_LOG" "$opt"
     echo ""
 done
 
-# ── Grand summary ──────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+#  PHASE 2: Generate consolidated diff report
+# ═══════════════════════════════════════════════════════════════════════
+CONSOLIDATED="$DIFF_DIR/consolidated_diff.log"
+info "Generating consolidated diff report → $CONSOLIDATED"
+
+# Write header
+{
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║  Consolidated Instruction Diff Report                        ║"
+    echo "║  Baseline: B=10                                              ║"
+    echo "║  Date: $(date '+%Y-%m-%d %H:%M:%S')                            ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo ""
+} > "$CONSOLIDATED"
+
+# Arrays for grand summary
+GRAND_TOTALS=()
+GRAND_DIFFS=()
+GRAND_FAILS=()
+
+for opt in "${OPT_LEVELS[@]}"; do
+    SWEEP_LOG="$SWEEP_DIR/sweep_${opt}.log"
+
+    DIFF_LEVEL_TOTAL=0
+    DIFF_LEVEL_DIFFS=0
+    DIFF_LEVEL_FAILS=0
+    DIFF_LEVEL_BASELINE=""
+    DIFF_TMP_FILE=""
+    diff_sweep_log "$SWEEP_LOG"
+
+    # Read diff body from temp file
+    DIFF_BODY=""
+    if [[ -n "$DIFF_TMP_FILE" && -f "$DIFF_TMP_FILE" ]]; then
+        DIFF_BODY=$(cat "$DIFF_TMP_FILE")
+        rm -f "$DIFF_TMP_FILE"
+    fi
+
+    # Append section to consolidated file
+    {
+        echo "════════════════════════════════════════════════════════════════"
+        echo "  $opt"
+        echo "════════════════════════════════════════════════════════════════"
+        echo "  Baseline B=10: ${DIFF_LEVEL_BASELINE:-N/A}"
+        if [[ -n "$DIFF_BODY" ]]; then
+            echo "$DIFF_BODY"
+        else
+            echo "  (no differences from baseline)"
+        fi
+        echo "  ─────────────────────────────────────────────────────────"
+        printf "  Summary: %d checked, %d diffs, %d failures\n" \
+            "$DIFF_LEVEL_TOTAL" "$DIFF_LEVEL_DIFFS" "$DIFF_LEVEL_FAILS"
+        echo ""
+    } >> "$CONSOLIDATED"
+
+    GRAND_TOTALS+=("$DIFF_LEVEL_TOTAL")
+    GRAND_DIFFS+=("$DIFF_LEVEL_DIFFS")
+    GRAND_FAILS+=("$DIFF_LEVEL_FAILS")
+done
+
+# Grand summary table
+{
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║  Grand Summary                                               ║"
+    echo "╠═══════════════════════════════════════════════════════════════╣"
+    printf "║  %-10s │ %-7s │ %-5s │ %-9s                    ║\n" \
+        "Opt Level" "Checked" "Diffs" "Failures"
+    echo "║  ──────────┼─────────┼───────┼─────────                    ║"
+    for i in "${!OPT_LEVELS[@]}"; do
+        printf "║  %-10s │ %7d │ %5d │ %9d                    ║\n" \
+            "${OPT_LEVELS[$i]}" "${GRAND_TOTALS[$i]}" "${GRAND_DIFFS[$i]}" "${GRAND_FAILS[$i]}"
+    done
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+} >> "$CONSOLIDATED"
+
+ok "Consolidated diff report → $CONSOLIDATED"
+
+# ── Grand summary (terminal) ──────────────────────────────────────────
 echo -e "${BOLD}════════════════════════════════════════════════════${NC}"
 echo -e "${BOLD}  Sweep complete: ${TOTAL} total builds${NC}"
 echo -e "  ${GREEN}Successes: ${SUCCESSES}${NC}"
 [[ $FAILURES -gt 0 ]] && echo -e "  ${RED}Failures:  ${FAILURES}${NC}"
-echo -e "  Sweep logs: ${SWEEP_DIR}/sweep_O*.log"
-echo -e "  Diff logs:  ${DIFF_DIR}/diff_O*.log  (baseline: B=10)"
+echo -e "  Sweep logs:      ${SWEEP_DIR}/sweep_O*.log"
+echo -e "  Consolidated:    ${CONSOLIDATED}"
 echo -e "${BOLD}════════════════════════════════════════════════════${NC}"
