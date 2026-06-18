@@ -276,5 +276,5 @@ for arg in "$@"; do
     esac
 done
 
-$DO_BUILD && do_build
-$DO_RUN   && do_run
+if $DO_BUILD; then do_build; fi
+if $DO_RUN;   then do_run;   fi
