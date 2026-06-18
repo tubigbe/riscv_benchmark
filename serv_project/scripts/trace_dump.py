@@ -6,14 +6,14 @@ Reads the raw 32-bit-integer binary trace and writes one line per cycle:
     [index]  0xXXXXXXXX  <symbol>       (if symbol resolved)
     [index]  0xXXXXXXXX                  (otherwise)
 
-Also generates a pure hex dump file (firmware.dump) at the project root,
-containing only raw PC addresses without any symbols or processing.
+Also generates a pure disassembly dump file (firmware.dump) at the project root.
 
 Optionally resolves PCs to symbols via $OBJDUMP (set by Codespace/env.sh).
 
 Usage:
     python3 trace_dump.py                         # auto-detect paths
     python3 trace_dump.py <trace.bin> [firmware.elf] [output.txt]
+    python3 trace_dump.py --clear                 # remove generated files
 """
 
 import struct
@@ -131,6 +131,24 @@ def write_pure_dump(elf: Path, out: Path):
 
 
 def main():
+    # ── Handle --clear ──────────────────────────────────────────
+    if len(sys.argv) > 1 and sys.argv[1] == "--clear":
+        files = [
+            SCRIPT_DIR / "log" / "trace_dump.txt",
+            SCRIPT_DIR / "firmware.dump",
+        ]
+        removed = 0
+        for f in files:
+            if f.exists():
+                f.unlink()
+                print(f"  Removed: {f}")
+                removed += 1
+        if removed == 0:
+            print("  No files to remove.")
+        else:
+            print(f"  Removed {removed} file(s).")
+        return
+
     trace_path, elf_path, out_path = parse_args()
 
     if not trace_path.exists():
