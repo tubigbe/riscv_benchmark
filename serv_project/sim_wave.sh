@@ -9,7 +9,7 @@
 #    for signal-level debugging of the SERV CPU and SoC peripherals.
 #
 #  Tools used:
-#    - run_sim.sh --clean --build   Clean build the Verilator model
+#    - run_sim.sh --clear --build   Clean build the Verilator model
 #    - run_sim.sh --run             Run simulation (generates VCD)
 #    - gtkwave                      Open waveform viewer (GUI)
 #
@@ -96,7 +96,7 @@ fi
 echo "╔══════════════════════════════════════════════╗"
 echo "║  Step 1-2: Clean & Build (with --trace)      ║"
 echo "╚══════════════════════════════════════════════╝"
-./run_sim.sh --clean --build
+./run_sim.sh --clear --build
 
 # ── Step 3: Run simulation ───────────────────────────────────
 echo ""

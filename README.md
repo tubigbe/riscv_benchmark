@@ -9,64 +9,76 @@ detailed per-instruction cycle-cost reports.
 ## Project Structure
 
 ```
-serv_project/
-├── Codespace
-│   ├── SERV_codespace
-│   │   ├── factorial.c
-│   │   ├── popcount.c
-│   │   ├── servant_tb_template
-│   │   ├── standalone_hello.S
-│   │   └── startup.S
-│   ├── env.sh
-│   └── test_files
-│       ├── firmware.c
-│       ├── hello_world.c
-│       ├── test.c
-│       └── uart_test.S
-├── README.md
-├── serv_project
-│   ├── build.sh
-│   ├── firmware.bin
-│   ├── firmware.elf
-│   ├── firmware.hex
-│   ├── fusesoc.conf
-│   ├── fusesoc_libraries
-│   │   ├── fusesoc_cores
-│   │   ├── mdu
-│   │   └── serv
-│   ├── instr_counter.sh
-│   ├── log
-│   │   ├── compare_result.txt
-│   │   ├── instr_count.log
-│   │   ├── sim_log.txt
-│   │   ├── sim_wave.vcd
-│   │   └── trace_dump.txt
-│   ├── run_sim.sh
-│   ├── scripts
-│   │   ├── compare_traces.py
-│   │   ├── sim_main.cpp
-│   │   └── trace_dump.py
-│   ├── sim_wave.sh
-│   └── tools
-├── setup.sh
-└── tools
-    └── riscv
+riscv_benchmark/
+├── Codespace/
+│   ├── env.sh                        Environment setup (toolchain PATH)
+│   └── SERV_codespace/               Firmware source files
+│       ├── build_codes/              ← Default build folder
+│       │   ├── startup.S
+│       │   └── popcount.c
+│       ├── factorial.c
+│       ├── popcount.c
+│       ├── standalone_hello.S
+│       ├── startup.S
+│       └── Week_3/                   Assignment folders
+│           └── Task_2/
+│               └── assemb_instr_ckeck.c
+├── serv_project/
+│   ├── build.sh                      Firmware build script
+│   ├── run_sim.sh                    Verilator simulation pipeline
+│   ├── sim_wave.sh                   Waveform viewer wrapper
+│   ├── instr_counter.sh              Static instruction counter
+│   ├── fusesoc.conf                  FuseSoC library config
+│   ├── fusesoc_libraries/            SERV RTL + peripherals
+│   │   ├── serv/                     SERV CPU core + SoC
+│   │   │   ├── rtl/                  CPU core (serv_top, serv_alu, …)
+│   │   │   ├── servant/              SoC wrapper (RAM, UART, GPIO, timer)
+│   │   │   ├── servile/              Wishbone bus arbiter
+│   │   │   ├── bench/                Testbench modules
+│   │   │   └── sw/
+│   │   │       ├── link.ld           Linker script (4KB RAM @ 0x0000)
+│   │   │       └── makehex.py        Binary → Verilog hex converter
+│   │   ├── fusesoc_cores/            Generic Wishbone peripherals
+│   │   └── mdu/                      Multiply/divide extension (unused)
+│   ├── scripts/
+│   │   ├── sim_main.cpp              Verilator C++ testbench
+│   │   ├── trace_dump.py             trace.bin → symbol-resolved text
+│   │   ├── compare_traces.py         Merge cycle costs + trace
+│   │   ├── cycle_cost.sh             Cycle cost between two PCs
+│   │   └── asm_sweep.sh              Optimization level sweep & diff
+│   ├── build/                        Verilator build output
+│   ├── log/                          Simulation & analysis logs
+│   └── obj_dir_custom/               Compiled Verilator model
+├── ibex_project/                     Ibex CPU benchmarks (separate)
+├── tools/riscv/                      RISC-V toolchain binaries
+├── setup.sh                          One-time environment setup
+└── README.md
 ```
 
 ---
 
 ## Quick Start
 
-### 1. Build firmware
+### 1. First-time setup
 
 ```bash
+cd riscv_benchmark
+./setup.sh               # Fetch submodules, verify tools
+source Codespace/env.sh  # Load toolchain into PATH
+```
+
+### 2. Build firmware
+
+```bash
+cd serv_project
 ./build.sh --build
 ```
 
-Compiles the default factorial demo (`startup.S` + `factorial.c`) into
-`firmware.elf`, `firmware.bin`, and `firmware.hex`.
+Auto-discovers sources from `Codespace/SERV_codespace/build_codes/`
+(`startup.S` + `popcount.c` by default). Outputs `firmware.elf`, `firmware.bin`,
+`firmware.hex`.
 
-### 2. Run Verilator simulation
+### 3. Run simulation
 
 ```bash
 ./run_sim.sh
@@ -75,7 +87,7 @@ Compiles the default factorial demo (`startup.S` + `factorial.c`) into
 Cleans old artifacts, builds the Verilator model, runs the simulation, and
 post-processes all traces. All outputs go to `log/`.
 
-### 3. View waveform
+### 4. View waveform
 
 ```bash
 ./sim_wave.sh
@@ -83,34 +95,98 @@ post-processes all traces. All outputs go to `log/`.
 
 Same as above but also opens `log/sim_wave.vcd` in GTKWave.
 
-### 4. Count instructions
+---
 
-```bash
-./instr_counter.sh
+## Cycle Cost Toolchain
+
+The full pipeline for measuring per-instruction cycle costs:
+
+```
+ ┌─────────────┐     ┌──────────────┐     ┌──────────────────┐
+ │  build.sh   │────▶│  run_sim.sh  │────▶│  Post-processing │
+ │  .c/.S → .hex│     │  Verilator   │     │  trace_dump.py   │
+ └─────────────┘     │  simulation  │     │  compare_traces.py│
+                     └──────────────┘     └──────────────────┘
+                                                  │
+                                                  ▼
+                                         log/compare_result.txt
+                                                  │
+                                                  ▼
+                                         scripts/cycle_cost.sh
+                                         (cycle cost between two PCs)
 ```
 
-Counts every unique instruction mnemonic in `firmware.elf` and writes the
-breakdown to `log/instr_count.log`.
+**Step by step:**
+
+```bash
+# 1. Build firmware
+./build.sh --build
+
+# 2. Run simulation (generates trace + cycle costs)
+./run_sim.sh
+
+# 3. View merged results
+cat log/compare_result.txt
+
+# 4. Analyze cycle cost between two addresses
+./scripts/cycle_cost.sh 0x48 0x6c
+```
+
+**What each stage produces:**
+
+| Stage | Script | Output | Description |
+|-------|--------|--------|-------------|
+| Build | `build.sh` | `firmware.hex` | Compiled firmware loaded into simulation RAM |
+| Simulate | `run_sim.sh` → `sim_main.cpp` | `log/sim_log.txt` | PC transitions with cycle counts |
+| Simulate | `run_sim.sh` → `sim_main.cpp` | `log/sim_wave.vcd` | VCD waveform (optional) |
+| Trace | `trace_dump.py` | `log/trace_dump.txt` | Symbol-resolved PC trace from `trace.bin` |
+| Merge | `compare_traces.py` | `log/compare_result.txt` | Combined trace with per-instruction cycle info |
+| Analyze | `cycle_cost.sh` | `log/cycle_cost_<s>_<e>.txt` | Cycle cost between two PC addresses |
+
+**Key insight:** `sim_main.cpp` monitors the `pc_vld` and `pc_adr` signals from the
+SERV CPU on every rising clock edge. When the PC changes, it records the elapsed
+cycles — this is the hardware cycle cost of executing the instruction at the
+previous PC. Some instructions (e.g. `sw`, `lbu`) span two RAM accesses and appear
+as two entries in `sim_log.txt`; `compare_traces.py` merges these automatically.
 
 ---
 
 ## Scripts Reference
 
-### `build.sh` — Firmware Build & Simulation
+### `build.sh` — Firmware Build
+
+Auto-discovers source files from a folder under `Codespace/SERV_codespace/` and
+compiles them into a RISC-V firmware image.
 
 | Flag | Description |
 |------|-------------|
-| `--build` | Compile firmware from sources listed in the script header |
-| `--run` | Launch FuseSoC-driven Verilator simulation (produces `trace.bin`) |
-| `--clean` | Remove `firmware.elf`, `firmware.bin`, `firmware.hex` |
+| `--build` | Compile firmware (default: from `build_codes/`) |
+| `--run` | Launch FuseSoC-driven Verilator simulation |
+| `--folder=NAME` | Build from `SERV_codespace/NAME/` instead of `build_codes/` |
+| `--clear` | Remove `firmware.elf`, `firmware.bin`, `firmware.hex` |
 
-**Environment variables:**
+**Folder mode:** Without `--folder`, sources are auto-discovered from
+`Codespace/SERV_codespace/build_codes/`. With `--folder=<name>`, sources are
+scanned from the named subfolder. Assembly files (`.s`/`.S`) are placed before
+C/C++ files automatically so `_start` lands at address 0. The folder is also
+added to `-I` for local `#include` support.
 
-| Variable | Description |
-|----------|-------------|
-| `BENCH=lw` | Use load-word benchmark sources instead of factorial demo |
+**Supported extensions:** `.s`, `.S`, `.c`, `.cc`, `.cpp`, `.cxx`, `.c++`
+
+**Compiler flags:** `-march=rv32i -mabi=ilp32 -O2 -static -nostdlib -nostartfiles -ffreestanding`
 
 **Outputs:** `firmware.elf`, `firmware.bin`, `firmware.hex`
+
+```bash
+# Default: build from build_codes/
+./build.sh --build
+
+# Build from a specific folder
+./build.sh --folder=Week_3/Task_2 --build
+
+# Build + simulate
+./build.sh --build --run
+```
 
 ---
 
@@ -131,6 +207,7 @@ Runs the full 4-step simulation pipeline:
 | `--clean` | Remove `obj_dir_custom/` only |
 | `--build` | Build Verilator model only |
 | `--run` | Run simulation only (model must exist) |
+| `--clear` | Remove log files (`sim_log.txt`, `trace_dump.txt`, etc.) |
 | `--firmware=FILE` | Use a different `.hex` firmware file |
 
 **Outputs (all in `log/`):**
@@ -144,6 +221,21 @@ Runs the full 4-step simulation pipeline:
 
 ---
 
+### `sim_wave.sh` — Waveform Viewer
+
+Convenience wrapper that calls `run_sim.sh` to build and simulate, then
+opens the VCD waveform in GTKWave.
+
+| Flag | Description |
+|------|-------------|
+| *(no args)* | Build + simulate + open waveform |
+| `--firmware=FILE` | Use a different `.hex` firmware file |
+| `--clear` | Remove log files and VCD |
+
+**Prerequisite:** `sudo apt install gtkwave`
+
+---
+
 ### `instr_counter.sh` — Static Instruction Counter
 
 Counts instruction mnemonics from the ELF disassembly. Supports counting
@@ -154,6 +246,7 @@ the entire binary or a specific range between two function labels.
 | `./instr_counter.sh` | Count all instructions in `firmware.elf` |
 | `./instr_counter.sh firmware.elf` | Count in a specific ELF file |
 | `./instr_counter.sh firmware.elf _start main` | Count between `<_start>` and `<main>` |
+| `./instr_counter.sh --clear` | Remove the generated log file |
 
 When both labels exist, only instructions between `start_label` (inclusive)
 and `end_label` (exclusive) are counted. If labels are not found, falls back
@@ -163,92 +256,107 @@ to counting the entire ELF.
 
 ---
 
-### `sim_wave.sh` — Waveform Viewer
-
-Convenience wrapper that calls `run_sim.sh` to build and simulate, then
-opens the VCD waveform in GTKWave.
-
-| Flag | Description |
-|------|-------------|
-| *(no args)* | Build + simulate + open waveform |
-| `--firmware=FILE` | Use a different `.hex` firmware file |
-
-**Outputs:** Same as `run_sim.sh`, plus GTKWave window opens automatically.
-
-**Prerequisite:** `sudo apt install gtkwave`
-
----
-
-## Post-Processing Scripts (`scripts/`)
-
-These are called automatically by `run_sim.sh` during the [4/4] POST-PROCESS step.
-
 ### `scripts/sim_main.cpp` — Verilator Testbench
 
-The C++ testbench that drives the Verilator simulation. Monitors PC address
-changes on every rising clock edge and reports the cycle cost for each
-instruction transition:
+The C++ testbench that drives the Verilator simulation. Compiled by `run_sim.sh`
+into the `Vservant_sim` binary. Monitors PC address changes on every rising clock
+edge and reports the cycle cost for each instruction transition:
 
 ```
 0x4 -> 0x8 : 36 cycles
 ```
 
-Redirects stdout to `log/sim_log.txt`. Also generates `log/sim_wave.vcd`
-when `+vcd=1` is passed.
+Also generates `log/sim_wave.vcd` when `+vcd=1` is passed.
+
+---
 
 ### `scripts/trace_dump.py` — Trace Dumper
 
-Reads the raw `trace.bin` (32-bit PC values) generated by FuseSoC and
-produces a human-readable trace with symbol resolution:
+Reads the raw `trace.bin` (32-bit PC values) generated by the simulation and
+produces a human-readable trace with symbol resolution via `riscv64-unknown-elf-objdump`:
 
 ```
-      3  0x0000000c  sb
-      4  0x00000010  lw
+  index  0x0000000c  sb
+  index  0x00000010  lw
 ```
 
-**Output:** `log/trace_dump.txt`
+Also generates `firmware.dump` (full disassembly with `-M no-aliases,numeric`).
+
+| Usage | Description |
+|-------|-------------|
+| `python3 scripts/trace_dump.py` | Auto-detect paths |
+| `python3 scripts/trace_dump.py <trace.bin> [firmware.elf] [output.txt]` | Custom paths |
+| `python3 scripts/trace_dump.py --clear` | Remove generated files |
+
+**Output:** `log/trace_dump.txt`, `firmware.dump`
+
+---
 
 ### `scripts/compare_traces.py` — Trace Merger
 
 Merges `log/sim_log.txt` (cycle costs) with `log/trace_dump.txt` (instruction
-names) into a combined report. Includes summary statistics (total cycles,
-average, min, max) and per-instruction averages.
+names) into a combined report. Handles two-part instructions (e.g. `sw`, `lbu`
+that span two RAM accesses) by merging `???` continuation entries into the
+preceding instruction.
+
+Includes summary statistics (total cycles, average, min, max) and per-instruction
+averages.
 
 **Output:** `log/compare_result.txt`
 
 ---
 
-## Building Different Firmware
+### `scripts/cycle_cost.sh` — Cycle Cost Calculator
 
-Edit the `SOURCES` array at the top of `build.sh`, or use environment variables:
+Reads `log/compare_result.txt` and calculates the total cycle cost between two
+user-specified PC addresses. Normalizes addresses to `0x000000XX` format.
 
-```bash
-# Default: factorial demo
-./build.sh --build
+| Usage | Description |
+|-------|-------------|
+| `./scripts/cycle_cost.sh <start> <end>` | Calculate cycle cost in range |
+| `./scripts/cycle_cost.sh --clear` | Remove dump files |
 
-# Load-word cycle benchmark
-BENCH=lw ./build.sh --build
-```
+Addresses can be passed as bare hex (`48 6c`), with `0x` prefix (`0x48 0x6c`),
+or full-width (`0x00000048 0x0000006c`).
 
-Supported source types: `.c`, `.S`, `.s`, `.asm`, `.cpp`, `.cc`
+**Output:** `log/cycle_cost_<start>_<end>.txt` + terminal breakdown
+
+---
+
+### `scripts/asm_sweep.sh` — Optimization Level Sweep
+
+Systematically tests how different compiler optimization levels and constant
+input values affect generated RISC-V assembly. Sweeps 5 optimization levels
+(O0–O3, Os) × 102 B values (0–101) = 510 builds, then diffs each B against
+B=10 as the baseline.
+
+| Usage | Description |
+|-------|-------------|
+| `./scripts/asm_sweep.sh` | Run full sweep + diff |
+| `./scripts/asm_sweep.sh --clear` | Remove all sweep and diff log files |
+
+**Outputs:**
+- `log/sweep/sweep_O<level>.log` — sweep results per optimization level
+- `log/diff/consolidated_diff.log` — consolidated diff report
 
 ---
 
 ## Toolchain Requirements
 
-| Tool | Package |
-|------|---------|
-| `riscv64-unknown-elf-gcc` | RISC-V GCC cross-compiler |
-| `verilator` | `verilator` (≥ 5.0) |
-| `fusesoc` | `fusesoc` (pip install) |
-| `python3` | `python3` (for makehex.py, trace scripts) |
-| `gtkwave` | `gtkwave` (optional, for waveform viewing) |
+| Tool | Package | Used by |
+|------|---------|---------|
+| `riscv64-unknown-elf-gcc` | RISC-V GCC cross-compiler | `build.sh` |
+| `riscv64-unknown-elf-objcopy` | ELF → binary conversion | `build.sh` |
+| `riscv64-unknown-elf-objdump` | Disassembly + symbol resolution | `instr_counter.sh`, `trace_dump.py` |
+| `verilator` (≥ 5.0) | Verilog → C++ compilation | `run_sim.sh` |
+| `g++` | C++ compilation | `run_sim.sh` |
+| `fusesoc` | FuseSoC package manager | `run_sim.sh` (via `build.sh --run`) |
+| `python3` | Script runtime | `build.sh` (makehex.py), `trace_dump.py`, `compare_traces.py` |
+| `gtkwave` | Waveform viewer (optional) | `sim_wave.sh` |
 
 ---
 
 ## New Teammate Setup Guide
-
-Follow these steps to get a working development environment from scratch.
 
 ### Step 1 — Clone the repository
 
@@ -259,51 +367,21 @@ cd riscv_benchmark
 
 ### Step 2 — Run the setup script
 
-The setup script fetches all submodules (SERV CPU core, FuseSoC libraries, etc.), loads the environment, and verifies your tools:
-
 ```bash
 ./setup.sh
 ```
 
-You should see output like:
-
-```
-========================================
-  riscv_benchmark setup
-========================================
-
-[INFO]  Initializing git submodules...
-[OK]    Submodules ready
-[INFO]  Verifying submodule content...
-[OK]      serv_project/fusesoc_libraries/serv
-[OK]      serv_project/fusesoc_libraries/mdu
-[OK]      serv_project/fusesoc_libraries/fusesoc_cores
-[INFO]  Loading environment...
-[OK]    Environment loaded
-[INFO]  Checking required tools...
-[OK]      RISC-V GCC: /home/you/riscv_benchmark/tools/riscv64/usr/bin/riscv64-unknown-elf-gcc
-[OK]      Python 3: ...
-[OK]      FuseSoC: ...
-[OK]      Verilator: ...
-[OK]      Make: ...
-========================================
-[OK]    Setup complete! All tools ready.
-========================================
-```
-
-If any tool shows "not found", see the **Troubleshooting** section below.
+This fetches all submodules (SERV CPU core, FuseSoC libraries), loads the
+environment, and verifies your tools.
 
 ### Step 3 — Load the environment
 
-The environment is **auto-loaded** when you open a terminal inside `~/riscv_benchmark/` (via `.bashrc` integration).
-
-To load it manually in any terminal:
+The environment is auto-loaded when you open a terminal inside `~/riscv_benchmark/`.
+To load manually:
 
 ```bash
 source ~/riscv_benchmark/Codespace/env.sh
 ```
-
-This adds the RISC-V toolchain, FuseSoC, Verilator, and Make to your `PATH`.
 
 ### Step 4 — Build and run your first simulation
 
@@ -312,23 +390,12 @@ cd ~/riscv_benchmark/serv_project
 ./build.sh --build --run
 ```
 
-You should see:
+### Step 5 — Analyze cycle costs
 
-```
-[INFO]  Building firmware...
-[INFO]  Compiling + linking -> firmware.elf
-[OK]    Linked: firmware.elf
-[OK]    Binary: firmware.bin (642 bytes)
-[OK]    Hex: firmware.hex (161 words)
-[OK]    Build done!
-[INFO]  Starting Verilator simulation...
-Loading RAM from firmware.hex
-factorial:
-  1! = 1
-  2! = 2
-  ...
-  10! = 3628800
-done
-Test complete
-[OK]    Trace saved: .../trace.bin (20988 PC entries)
+```bash
+# View the merged trace with per-instruction cycle info
+cat log/compare_result.txt
+
+# Calculate cycle cost between two addresses
+./scripts/cycle_cost.sh 0x48 0x6c
 ```

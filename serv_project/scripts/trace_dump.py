@@ -6,11 +6,14 @@ Reads the raw 32-bit-integer binary trace and writes one line per cycle:
     [index]  0xXXXXXXXX  <symbol>       (if symbol resolved)
     [index]  0xXXXXXXXX                  (otherwise)
 
+Also generates a pure disassembly dump file (firmware.dump) at the project root.
+
 Optionally resolves PCs to symbols via $OBJDUMP (set by Codespace/env.sh).
 
 Usage:
     python3 trace_dump.py                         # auto-detect paths
     python3 trace_dump.py <trace.bin> [firmware.elf] [output.txt]
+    python3 trace_dump.py --clear                 # remove generated files
 """
 
 import struct
@@ -21,9 +24,10 @@ from pathlib import Path
 
 # ── Default paths (relative to project root) ────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_TRACE = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
-DEFAULT_ELF   = SCRIPT_DIR / "firmware.elf"
-DEFAULT_OUT   = SCRIPT_DIR / "log" / "trace_dump.txt"
+DEFAULT_TRACE  = SCRIPT_DIR / "build" / "award-winning_serv_servant_1.4.0" / "verilator_tb" / "trace.bin"
+DEFAULT_ELF    = SCRIPT_DIR / "firmware.elf"
+DEFAULT_OUT    = SCRIPT_DIR / "log" / "trace_dump.txt"
+DEFAULT_DUMP   = SCRIPT_DIR / "firmware.dump"
 
 # Ensure log directory exists
 os.makedirs(SCRIPT_DIR / "log", exist_ok=True)
@@ -105,7 +109,46 @@ def write_dump(pcs: list[int], symbols: dict[int, str], out: Path):
     return out
 
 
+def write_pure_dump(elf: Path, out: Path):
+    """
+    Generate a pure disassembly dump using riscv64-unknown-elf-objdump.
+    Produces a clean, unmodified dump with -M no-aliases,numeric.
+    """
+    try:
+        result = subprocess.run(
+            [OBJDUMP, "-d", "-M", "no-aliases,numeric", str(elf)],
+            capture_output=True, text=True, timeout=60,
+        )
+        with open(out, "w") as f:
+            f.write(result.stdout)
+        return out
+    except FileNotFoundError:
+        print(f"WARNING: {OBJDUMP} not found, skipping pure dump", file=sys.stderr)
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"WARNING: objdump timed out, skipping pure dump", file=sys.stderr)
+        return None
+
+
 def main():
+    # ── Handle --clear ──────────────────────────────────────────
+    if len(sys.argv) > 1 and sys.argv[1] == "--clear":
+        files = [
+            SCRIPT_DIR / "log" / "trace_dump.txt",
+            SCRIPT_DIR / "firmware.dump",
+        ]
+        removed = 0
+        for f in files:
+            if f.exists():
+                f.unlink()
+                print(f"  Removed: {f}")
+                removed += 1
+        if removed == 0:
+            print("  No files to remove.")
+        else:
+            print(f"  Removed {removed} file(s).")
+        return
+
     trace_path, elf_path, out_path = parse_args()
 
     if not trace_path.exists():
@@ -131,6 +174,11 @@ def main():
     # Write output
     out = write_dump(pcs, symbols, out_path)
     print(f"  Written to {out}")
+
+    # Write pure disassembly dump
+    dump = write_pure_dump(elf_path, DEFAULT_DUMP)
+    if dump:
+        print(f"  Pure dump: {dump}")
 
 
 if __name__ == "__main__":

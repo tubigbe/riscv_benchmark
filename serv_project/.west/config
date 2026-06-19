@@ -1,7 +1,0 @@
-[manifest]
-path = /home/chenyoo/servWorkspace/fusesoc_libraries/serv
-file = west.yml
-
-[zephyr]
-base = zephyr
-
