@@ -16,15 +16,21 @@
 #    - fusesoc                      Build & run Verilator simulation
 #
 #  Usage:
-#    ./build.sh --build               Compile firmware only
+#    ./build.sh --build               Compile firmware (default: build_codes/)
 #    ./build.sh --run                 Run simulation (firmware must exist)
 #    ./build.sh --build --run         Compile then simulate
 #    ./build.sh --clear               Remove build artifacts
-#    BENCH=lw ./build.sh --build --run   Use load-word benchmark sources
+#    ./build.sh --folder=Wk3 --build  Build from SERV_codespace/Wk3/ instead
 #
-#  Inputs (sources, configured at top of this script):
-#    - startup.S                 RISC-V boot code (_start entry point)
-#    - factorial.c / test_lw_cycles.s / main.c   Application code
+#  Default folder mode:
+#    Without --folder, auto-discovers sources from
+#    Codespace/SERV_codespace/build_codes/
+#    With --folder=<name>, uses Codespace/SERV_codespace/<name>/ instead.
+#    Assembly files (.s/.S) are placed before C/C++ files automatically.
+#    The folder is also added to -I so local #includes work.
+#
+#  Inputs (sources from SERV_codespace/build_codes/ by default):
+#    - startup.S / popcount.c / etc.
 #
 #  Outputs (generated files in serv_project/):
 #    - firmware.elf              Linked ELF binary
@@ -35,17 +41,14 @@
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-# ── EDIT THIS: source file list ──────────────────────────────
-# Add / remove entries below. Paths are relative to serv_project/.
-# Supported types: .c .cc .cpp .S .s .asm
-# Duplicates are automatically skipped; missing files trigger a warning.
+# ── Folder mode ─────────────────────────────────────────────
+# Default: auto-discover from build_codes/
+# Override with --folder=<name> to use a different folder
 # ──────────────────────────────────────────────────────────────
-STARTUP="../Codespace/SERV_codespace/startup.S"
-
-SOURCES=(
-    "$STARTUP"
-    "../Codespace/SERV_codespace/factorial.c"
-)
+FOLDER=""
+DEFAULT_FOLDER="build_codes"
+SERV_CODESPACE="../Codespace/SERV_codespace"
+# ──────────────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────────────
 
 # Project root (script's own directory)
@@ -66,7 +69,7 @@ ARCH=rv32i
 ABI=ilp32
 COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
 INCLUDES="-I$SCRIPT_DIR/../Codespace"
-CFLAGS="-O1 $COMMON_FLAGS $INCLUDES"
+CFLAGS="-O2 $COMMON_FLAGS $INCLUDES"
 LDSCRIPT="fusesoc_libraries/serv/sw/link.ld"
 MAKEHEX="fusesoc_libraries/serv/sw/makehex.py"
 
@@ -122,6 +125,27 @@ do_build() {
 
     [[ -f "$LDSCRIPT" ]] || fail "Linker script not found: $LDSCRIPT"
     [[ -f "$MAKEHEX" ]]  || fail "makehex.py not found: $MAKEHEX"
+
+    # ── Resolve folder: use --folder or default to build_codes/ ──
+    local USE_FOLDER="${FOLDER:-$DEFAULT_FOLDER}"
+    local FOLDER_PATH="$SERV_CODESPACE/$USE_FOLDER"
+    [[ -d "$FOLDER_PATH" ]] || fail "Folder not found: $FOLDER_PATH"
+
+    SOURCES=()
+    local EXT_PATTERN="*.s *.S *.c *.cc *.cpp *.cxx *.c++"
+    for ext_pat in $EXT_PATTERN; do
+        for f in "$FOLDER_PATH"/$ext_pat; do
+            [[ -f "$f" ]] && SOURCES+=("$f")
+        done
+    done
+
+    [[ ${#SOURCES[@]} -eq 0 ]] && fail "No source files found in $FOLDER_PATH"
+
+    # Add folder to include path so local headers work
+    INCLUDES="-I$SCRIPT_DIR/../Codespace -I$FOLDER_PATH"
+    CFLAGS="-O2 $COMMON_FLAGS $INCLUDES"
+
+    info "Folder: $FOLDER_PATH"
 
     # ── Partition sources: assembly first, then C/C++ ──────
     local ASM_SRCS=()
@@ -244,18 +268,21 @@ do_clear() {
 #  Main: parse command-line arguments
 # ══════════════════════════════════════════════════════════════
 usage() {
-    echo "Usage: $0 [--build] [--run] [--clear]"
+    echo "Usage: $0 [--folder=NAME] [--build] [--run] [--clear]"
     echo ""
-    echo "  --build   Compile firmware (deduplicates sources automatically)"
-    echo "  --run     Launch Verilator simulation"
-    echo "  --clear   Remove all build artifacts"
+    echo "  --folder=NAME  Build from Codespace/SERV_codespace/NAME/ (default: build_codes/)"
+    echo "  --build        Compile firmware (deduplicates sources automatically)"
+    echo "  --run          Launch Verilator simulation"
+    echo "  --clear        Remove all build artifacts"
     echo ""
-    echo "Edit the SOURCES array at the top of this script to add/remove files."
+    echo "Default: auto-discovers .s/.S/.c/.cpp files from build_codes/."
+    echo "Use --folder to build from a different folder instead."
     echo ""
     echo "Examples:"
-    echo "  $0 --build          # compile only"
-    echo "  $0 --build --run    # compile + simulate"
-    echo "  $0 --clear          # clear artifacts"
+    echo "  $0 --build                         # compile from build_codes/"
+    echo "  $0 --folder=Week_3/Task_2 --build  # compile from Week_3/Task_2/"
+    echo "  $0 --folder=fib --build --run      # compile + simulate from fib/"
+    echo "  $0 --clear                         # clear artifacts"
 }
 
 if [[ $# -eq 0 ]]; then
@@ -268,10 +295,11 @@ DO_RUN=false
 
 for arg in "$@"; do
     case "$arg" in
-        --build)  DO_BUILD=true ;;
-        --run)    DO_RUN=true ;;
-        --clear)  do_clear; exit 0 ;;
-        --help|-h) usage; exit 0 ;;
+        --folder=*) FOLDER="${arg#*=}" ;;
+        --build)    DO_BUILD=true ;;
+        --run)      DO_RUN=true ;;
+        --clear)    do_clear; exit 0 ;;
+        --help|-h)  usage; exit 0 ;;
         *) fail "Unknown argument: $arg (use --help for usage)" ;;
     esac
 done
