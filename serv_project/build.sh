@@ -44,7 +44,7 @@ STARTUP="../Codespace/SERV_codespace/startup.S"
 
 SOURCES=(
     "$STARTUP"
-    "../Codespace/SERV_codespace/popcount.c"
+    "../Codespace/SERV_codespace/factorial.c"
 )
 # ──────────────────────────────────────────────────────────────
 
