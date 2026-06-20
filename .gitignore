@@ -25,6 +25,8 @@ __pycache__/
 *.deb
 .vscode/
 
+AGENTS.md
+
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
 serv_project/modules/
