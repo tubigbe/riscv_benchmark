@@ -25,6 +25,8 @@ __pycache__/
 *.deb
 .vscode/
 
+AGENTS.md
+
 # ── Large vendored / generated directories ──
 serv_project/zephyr/
 serv_project/modules/
@@ -40,3 +42,4 @@ serv_project/log
 Codespace/practice_zhang/
 serv_project/obj_dir_custom/
 serv_project/fusesoc_libraries/
+serv_project/plan/
