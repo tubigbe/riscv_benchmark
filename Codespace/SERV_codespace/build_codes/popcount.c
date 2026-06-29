@@ -20,5 +20,5 @@ int main(void){
     // 调用带返回值的 popcount，并写入 volatile sink，避免 -O2 删除计算
     popcount_sink = popcount(reg_x1);
 
-    return popcount_sink; 
+    return popcount_sink;
 }
