@@ -17,6 +17,10 @@ cps
 __pycache__/
 *.pyc
 
+# practice files
+instr_capture.sh
+popcount_sweep.sh
+
 # ── Backup files ──
 *.bak
 *~
