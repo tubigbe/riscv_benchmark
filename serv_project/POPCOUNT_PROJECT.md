@@ -272,6 +272,16 @@ cnt_done (stage 2)
 ### Issue 3: `alu_rd_sel` must pass `rs1` through (RESOLVED)
 - Resolved by Issue 1 fix — with `op_b = 0`, both ADD and XOR paths compute `rs1` correctly
 
+### Issue 4: `bufreg_q` ORed into `o_rd`, corrupting custom instruction result (FIXED)
+- **Root cause:** `serv_alu.o_rd = i_buf | result_add | ...` (OR, not mux). During stage 1,
+  `serv_bufreg` receives `rs1` from cus_alu output (`pr_partial[0]`) and accumulates it.
+  For inputs with many 1-bits, `bufreg_q` becomes all-1s; in stage 2 it ORs into the ALU
+  output, making every result bit 1.
+- **Fix 1:** Changed `serv_bufreg.i_rs1` to use `rs1_raw` (original RF output) instead of
+  `rs1` (cus_alu output), preventing bufreg from seeing cus_alu's serial stream.
+- **Fix 2:** Added mux that forces `alu_buf = 0` when `is_customized & ~init`, so even if
+  bufreg_q has stale data, it won't corrupt the ALU result.
+
 ---
 
 ## File Inventory
