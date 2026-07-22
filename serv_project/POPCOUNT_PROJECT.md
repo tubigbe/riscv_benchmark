@@ -259,28 +259,18 @@ cnt_done (stage 2)
 
 ---
 
-## Known Incompleteness / Issues
+## Known Incompleteness / Issues (All Resolved)
 
-### Issue 1: `op_b != 0` during stage 2 (DEFERRED)
-- `op_b` is driven by `serv_bufreg2.o_op_b`
-- For OP-type (opcode override 01100): `op_b_sel = opcode[3] = 1` -> selects RS2
-- `op_b = rs2` throughout stage 2
-- Main ALU computes `alu_rd = rs1 + op_b + carry` (for funct3=000, ADD path)
-- Popcount result on `rs1` is corrupted by addition of `rs2`
-- **Planned fix:** Add mux in `serv_top.v` to force `op_b = 0` when `is_customized & ~init`
+### Issue 1: `op_b != 0` during stage 2 (FIXED)
+- **Root cause:** `op_b` driven by `serv_bufreg2.o_op_b` = rs2 during stage 2, corrupting ALU result
+- **Fix:** Added mux in `serv_top.v` that forces `op_b = 0` when `is_customized & ~init`
 
-### Issue 2: `o_rf_wreq` condition for funct3 without `rd_sel[1]`
-- Original `o_rf_wreq` ALU term: `i_rd_alu_en & i_alu_rd_sel1 & last_init`
-- If funct3 encoding doesn't set `alu_rd_sel[1] = 1`, original term won't fire
-- Custom term `i_is_customized & last_init` bypasses this (already implemented)
+### Issue 2: `o_rf_wreq` condition for funct3 without `rd_sel[1]` (FIXED)
+- **Root cause:** Original term `i_rd_alu_en & i_alu_rd_sel1 & last_init` misses some funct3 values
+- **Fix:** Custom term `i_is_customized & last_init` added in `serv_state.v` bypasses this
 
-### Issue 3: `alu_rd_sel` must pass `rs1` through
-- For funct3=000: `rd_sel = 3'b001` -> ALU selects `result_add`
-- With `op_b = 0`: `result_add = rs1 + 0 + carry = rs1` (correct)
-- With `op_b = rs2`: `result_add = rs1 + rs2` (WRONG, blocked by Issue 1)
-- For funct3=100 (XOR): `rd_sel = 3'b100` -> ALU selects `result_bool`
-- `result_bool = rs1 ^ op_b` → with `op_b = 0`, `rs1 ^ 0 = rs1` (correct)
-- But still needs Issue 1 fixed
+### Issue 3: `alu_rd_sel` must pass `rs1` through (RESOLVED)
+- Resolved by Issue 1 fix — with `op_b = 0`, both ADD and XOR paths compute `rs1` correctly
 
 ---
 
