@@ -107,9 +107,11 @@ VERILOG_SOURCES=(
     fusesoc_libraries/serv/servile/servile_rf_mem_if.v
     fusesoc_libraries/serv/rtl/serv_top.v
     fusesoc_libraries/serv/rtl/serv_state.v
+    fusesoc_libraries/serv/rtl/serv_customized_state.v
     fusesoc_libraries/serv/rtl/serv_decode.v
     fusesoc_libraries/serv/rtl/serv_ctrl.v
     fusesoc_libraries/serv/rtl/serv_alu.v
+    fusesoc_libraries/serv/rtl/serv_customized_alu.v
     fusesoc_libraries/serv/rtl/serv_immdec.v
     fusesoc_libraries/serv/rtl/serv_bufreg.v
     fusesoc_libraries/serv/rtl/serv_bufreg2.v
