@@ -98,29 +98,15 @@ int main(void) {
     unsigned int custom_res = popcnt_range_custom(start, end);
     unsigned int sw_res     = popcnt_range_sw(start, end);
 
-    print_str("range: 0x");
-    print_hex(start);
-    print_str(" - 0x");
-    print_hex(end);
-    print_str(" (10 words)\n");
-
-    print_str("custom = ");
-    print_uint(custom_res);
-    print_str(" (0x");
-    print_hex(custom_res);
-    print_str(")\n");
-
-    print_str("sw     = ");
-    print_uint(sw_res);
-    print_str(" (0x");
-    print_hex(sw_res);
-    print_str(")\n");
-
-    if (custom_res == sw_res) {
-        print_str("RESULT: PASS\n");
-    } else {
-        print_str("RESULT: FAIL\n");
-    }
+    /* Signature-based result (captured by fusesoc to a file):
+     *   0x80000000 <- 'P' if pass, 'F' if fail
+     *   0x80000004 <- custom result (low byte)
+     *   0x80000008 <- sw result (low byte)
+     */
+    *(volatile unsigned char *)0x80000000 =
+        (custom_res == sw_res) ? 'P' : 'F';
+    *(volatile unsigned char *)0x80000004 = (unsigned char)custom_res;
+    *(volatile unsigned char *)0x80000008 = (unsigned char)sw_res;
 
     *(volatile unsigned int *)0x90000000 = 0;
     return 0;
