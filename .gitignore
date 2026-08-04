@@ -47,3 +47,5 @@ Codespace/practice_zhang/
 serv_project/obj_dir_custom/
 serv_project/fusesoc_libraries/
 serv_project/plan/
+serv_project/DataFlow/
+serv_project/riscv-gnu-toolchain/
