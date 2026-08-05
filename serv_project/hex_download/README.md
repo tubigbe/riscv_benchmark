@@ -6,8 +6,8 @@
 
 SERV（bit-serial RV32I）核上实现了一个自定义 popcount 指令，经历了两个阶段：
 
-- **V1（旧，已废弃）**：`popcount rd, rs1` 寄存器版（32-bit 固定），子模块 commit `ac5aa03`。
-- **V2（当前）**：`popcount rd, rs1(start), rs2(end)` 内存区间版（任意长度），子模块 commit `e81a9cf`。
+- **V1（旧，已废弃）**：`popcount rd, rs1` 寄存器版（32-bit 固定），需旧版 RTL（寄存器版）。
+- **V2（当前）**：`popcount rd, rs1(start), rs2(end)` 内存区间版（任意长度），需最新 RTL（区间版）。
 
 功能与周期已验证：同一 5-word 数组
 `{0x00000000, 0xFFFFFFFF, 0xDEADBEEF, 0x55555555, 0xAAAAAAAA}`，
@@ -29,12 +29,12 @@ SERV（bit-serial RV32I）核上实现了一个自定义 popcount 指令，经�
 | 综合哪个 RTL | 用途 |
 |-------------|------|
 | baseline SERV（**不带**任何自定义逻辑） | 基准面积 |
-| `e81a9cf`（带区间 popcount 自定义硬件） | 自定义指令面积 |
+| 最新 RTL（带区间 popcount 自定义硬件） | 自定义指令面积 |
 
 硬件成本 = 两者面积之差。
 
 - **⚠️ 别踩坑**：不要用同一个 RTL 综合两遍去"对比"——结果相同、差异为 0。必须综合两个不同的 RTL 版本。
-- baseline SERV：从子模块 git 历史找（如 `f5ddfaa` 或更早的上游），或把 `e81a9cf` 中自定义逻辑去掉（`serv_customized_alu.v`、`serv_customized_state.v` 及相关 mux/门控）。
+- baseline SERV：用不含任何自定义逻辑的 SERV 原版 RTL，或把最新 RTL 中的自定义逻辑去掉（`serv_customized_alu.v`、`serv_customized_state.v` 及相关 mux/门控）。
 
 ### 任务 B：动态功耗（dynamic power）
 
@@ -43,7 +43,7 @@ SERV（bit-serial RV32I）核上实现了一个自定义 popcount 指令，经�
 | hex 文件 | 加载到哪个综合后的设计 | 固件内容 |
 |----------|----------------------|----------|
 | `popcount_sw_bench.hex` | baseline SERV | 软件 32-bit 循环 popcount，**无**自定义指令 |
-| `popcount_v2_bench.hex` | `e81a9cf` | **1 条**区间 popcount 指令（`0x00E787AB`） |
+| `popcount_v2_bench.hex` | 最新 RTL（带区间 popcount） | **1 条**区间 popcount 指令（`0x00E787AB`） |
 
 - 两个 hex 都计算同样的工作量（5 words 总和 = 88 = 0x58），只是 V2 用硬件指令（约 250 周期）替代软件循环（约 40860 周期），切换活动差异大，适合测动态功耗。
 - hex 是 RTL 无关的编译产物（机器码），所以在**任何 RTL 版本下编译都一样**，无需为生成 hex 切换 RTL。
@@ -67,4 +67,4 @@ serv_project/hex_download/
 3. `cus_mode` 必须声明为 `[1:0]`（2-bit mode），1-bit 会导致 WRITE_BACK 不移位。
 4. WRITE_BACK 需 bit_cnt==0 保持、bit_cnt==1 起移位，否则结果 = 真值>>1。
 5. PC 交接：is_customized 需在 WRITE_BACK 起始拉低（PC 更新是位串行，需 counter 跑全程）。
-6. V1 的旧 RTL（`ac5aa03`）才能跑 V1 固件；当前 RTL 会把 V1 编码（rs2=x0）误判成区间 popcount。
+6. V1 的旧版 RTL（寄存器版）才能跑 V1 固件；最新 RTL 会把 V1 编码（rs2=x0）误判成区间 popcount。
