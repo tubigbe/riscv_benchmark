@@ -2,12 +2,15 @@
 # ═══════════════════════════════════════════════════════════════════════
 #  Reproduce the memory-range popcount custom-instruction test
 #
-#  Tests popcount rd, rs1(start), rs2(end) over a 10-word array and
-#  verifies the custom-instruction result equals the software popcount.
+#  Tests popcount rd, rs1(start), rs2(byte_offset) over a 10-word array
+#  (offset=36) plus boundary cases (offset 0/4/8/7, misaligned start,
+#  offset=2048 max) and verifies the custom-instruction result equals the
+#  software popcount.
 #
 #  Usage: ./reproduce_range_popcount.sh
 #
 #  The custom-instruction result is printed via UART to the terminal:
+#    range: 0x00000568 offset=36 (10 words)
 #    custom = 154 (0x0000009a)
 #    sw     = 154 (0x0000009a)
 #    RESULT: PASS

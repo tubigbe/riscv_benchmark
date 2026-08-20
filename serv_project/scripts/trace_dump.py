@@ -33,7 +33,11 @@ DEFAULT_DUMP   = SCRIPT_DIR / "firmware.dump"
 os.makedirs(SCRIPT_DIR / "log", exist_ok=True)
 
 # ── Tool from environment (set by Codespace/env.sh) ─────────
-OBJDUMP = os.environ.get("OBJDUMP", "riscv64-unknown-elf-objdump")
+# Prefer the custom-built objdump (knows the popcount mnemonic).
+_CUSTOM_OBJDUMP = SCRIPT_DIR / ".." / "riscv-gnu-toolchain" / "install" / "bin" / "riscv64-unknown-elf-objdump"
+OBJDUMP = os.environ.get("OBJDUMP", "")
+if not OBJDUMP or not os.access(OBJDUMP, os.X_OK):
+    OBJDUMP = str(_CUSTOM_OBJDUMP) if _CUSTOM_OBJDUMP.is_file() else "riscv64-unknown-elf-objdump"
 
 
 def parse_args():

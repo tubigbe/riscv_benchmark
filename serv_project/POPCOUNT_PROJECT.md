@@ -47,6 +47,10 @@ serv_top.v  (modified)
 
 ## Instruction Encoding
 
+> **NOTE**: this file documents the Phase-1/2 era. The current v2 semantics
+> (`rs2` = byte offset 0..2048, not an absolute end address) and register
+> budget are described in AGENTS.md → Phase 5.
+
 Using RISC-V **custom-0** opcode space:
 
 ```

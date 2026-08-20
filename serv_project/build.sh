@@ -64,6 +64,11 @@ SIZE="${SIZE:-${_prefix}size}"
 OBJDUMP="${OBJDUMP:-${_prefix}objdump}"
 FUSESOC="${FUSESOC:-fusesoc}"
 
+# Custom binutils (as/objdump with popcount support) built from
+# riscv-gnu-toolchain/binutils. -B makes gcc pick our `as` first.
+CUSTOM_BINUTILS_BIN="$SCRIPT_DIR/../riscv-gnu-toolchain/install/bin"
+[[ -x "$CUSTOM_BINUTILS_BIN/riscv64-unknown-elf-as" ]] && BFLAG="-B$CUSTOM_BINUTILS_BIN" || BFLAG=""
+
 # ── Compiler flags ───────────────────────────────────────────
 ARCH=rv32i
 ABI=ilp32
@@ -193,7 +198,7 @@ do_build() {
 
     # ── Single GCC command: compile + link ─────────────────
     info "Compiling + linking -> $ELF"
-    $CC $CFLAGS -T "$LDSCRIPT" -o "$ELF" "${ALL_SRCS[@]}"
+    $CC $BFLAG $CFLAGS -T "$LDSCRIPT" -o "$ELF" "${ALL_SRCS[@]}"
     ok "Linked: $ELF"
 
     echo ""

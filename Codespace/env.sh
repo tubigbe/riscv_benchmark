@@ -60,7 +60,13 @@ export RISCV_ABI="ilp32"
 export PYTHON="/usr/bin/python3"
 export VERILATOR="$(command -v verilator 2>/dev/null || echo "$RISCV_BENCHMARK/tools/verilator/usr/bin/verilator")"
 export FUSESOC="$(command -v fusesoc 2>/dev/null || echo "$HOME/.local/bin/fusesoc")"
-export OBJDUMP="$(command -v riscv64-unknown-elf-objdump 2>/dev/null || echo "riscv64-unknown-elf-objdump")"
+# Prefer the custom-built objdump (knows the popcount mnemonic), fall back to PATH.
+_CUSTOM_OBJDUMP="$RISCV_BENCHMARK/riscv-gnu-toolchain/install/bin/riscv64-unknown-elf-objdump"
+if [[ -x "$_CUSTOM_OBJDUMP" ]]; then
+    export OBJDUMP="$_CUSTOM_OBJDUMP"
+else
+    export OBJDUMP="$(command -v riscv64-unknown-elf-objdump 2>/dev/null || echo "riscv64-unknown-elf-objdump")"
+fi
 
 # ============================================================
 #  Aliases
