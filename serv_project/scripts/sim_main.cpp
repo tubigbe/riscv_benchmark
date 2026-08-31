@@ -18,6 +18,8 @@
 #include <cstdint>
 #include <iomanip>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "Vservant_sim.h"  // Auto-generated header by Verilator for servant_sim
 #include "verilated.h"
@@ -53,6 +55,25 @@ int main(int argc, char** argv) {
             top->trace(tfp, 99);       // Trace 99 levels of hierarchy
             tfp->open("log/sim_wave.vcd");
             std::cout << "[VCD] Tracing enabled -> log/sim_wave.vcd" << std::endl;
+        }
+    }
+
+    // ── PC trace binary file setup ──────────────────────────
+    int trace_fd = -1;
+    {
+        const char* trace_arg = Verilated::commandArgsPlusMatch("trace_pc=");
+        if (trace_arg[0]) {
+            const char* trace_path = "build/award-winning_serv_servant_1.4.0/verilator_tb/trace.bin";
+            // Ensure parent directory exists
+            mkdir("build", 0755);
+            mkdir("build/award-winning_serv_servant_1.4.0", 0755);
+            mkdir("build/award-winning_serv_servant_1.4.0/verilator_tb", 0755);
+            trace_fd = open(trace_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+            if (trace_fd < 0) {
+                std::cerr << "[WARN] Cannot open " << trace_path << " for writing" << std::endl;
+            } else {
+                std::cout << "[Trace] Writing PC trace -> " << trace_path << std::endl;
+            }
         }
     }
 
@@ -102,6 +123,15 @@ int main(int argc, char** argv) {
              */
             if (top->pc_vld) {
                 uint32_t current_pc = top->pc_adr;
+
+                // Write raw PC to trace.bin for post-processing
+                if (trace_fd >= 0) {
+                    if (write(trace_fd, &current_pc, 4) < 0) {
+                        std::cerr << "[WARN] Failed to write trace.bin" << std::endl;
+                        close(trace_fd);
+                        trace_fd = -1;
+                    }
+                }
 
                 /*
                  * First valid PC:
@@ -163,6 +193,12 @@ int main(int argc, char** argv) {
         tfp->flush();
         tfp->close();
         std::cout << "[VCD] Trace file closed: log/sim_wave.vcd" << std::endl;
+    }
+
+    // Close PC trace binary
+    if (trace_fd >= 0) {
+        close(trace_fd);
+        std::cout << "[Trace] PC trace saved: trace.bin" << std::endl;
     }
 
     top->final();

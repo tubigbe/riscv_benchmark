@@ -221,7 +221,7 @@ if $DO_RUN; then
     echo "  Binary   : ${BINARY}"
     echo "  VCD      : log/sim_wave.vcd"
     echo "════════════════════════════════════════"
-    "$BINARY" "+firmware=${FIRMWARE}" "+vcd=1"
+    "$BINARY" "+firmware=${FIRMWARE}" "+vcd=1" "+trace_pc=1"
 
     # ── Post-processing ──────────────────────────────────────
     echo "════════════════════════════════════════"
