@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdint.h>
 #include "RF_model.h"
 #include "samples.h"
