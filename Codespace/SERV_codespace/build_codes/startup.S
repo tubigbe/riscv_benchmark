@@ -8,7 +8,7 @@ _start:
      * 你的 python3 makehex.py 参数写的是 4096 (4KB RAM)，
      * 栈是向下生长的，所以把 sp 设在 RAM 的最顶端 4096 字节处
      */
-    li      sp, 4096
+    li      sp, 8192
 
     /* 2. 初始化：将 GPIO 拉高 */
     li	a0, GPIO_ADDR
