@@ -73,13 +73,6 @@ DO_BUILD=false
 DO_RUN=false
 DO_CLEAR=false
 
-# If no args at all → do everything
-if [[ $# -eq 0 ]]; then
-    DO_CLEAN=true
-    DO_BUILD=true
-    DO_RUN=true
-fi
-
 for arg in "$@"; do
     case "$arg" in
         --clean)    DO_CLEAN=true ;;
@@ -108,6 +101,13 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+# No action flag given (e.g. only --serv-dir / --firmware) → do everything
+if ! $DO_CLEAN && ! $DO_BUILD && ! $DO_RUN && ! $DO_CLEAR; then
+    DO_CLEAN=true
+    DO_BUILD=true
+    DO_RUN=true
+fi
 
 if [[ ! -d "$SERV_DIR" ]]; then
     echo "[ERROR] SERV RTL dir not found: $SERV_DIR"
@@ -148,15 +148,10 @@ VERILOG_SOURCES=(
     ${SERV_DIR}/bench/uart_decoder.v
 )
 
-# Variant-specific RTL: popcount (serv) vs BNE early-exit (serv_bne)
-if [[ "$SERV_DIR" == *bne* ]]; then
-    VERILOG_SOURCES+=(${SERV_DIR}/rtl/serv_bne_early.v)
-else
-    VERILOG_SOURCES+=(
-        ${SERV_DIR}/rtl/serv_customized_state.v
-        ${SERV_DIR}/rtl/serv_customized_alu.v
-    )
-fi
+# Variant-specific RTL, picked by existence (popcount vs BNE vs original):
+[[ -f "$SERV_DIR/rtl/serv_bne_early.v" ]]        && VERILOG_SOURCES+=(${SERV_DIR}/rtl/serv_bne_early.v)
+[[ -f "$SERV_DIR/rtl/serv_customized_alu.v" ]]   && VERILOG_SOURCES+=(${SERV_DIR}/rtl/serv_customized_alu.v)
+[[ -f "$SERV_DIR/rtl/serv_customized_state.v" ]] && VERILOG_SOURCES+=(${SERV_DIR}/rtl/serv_customized_state.v)
 
 CPP_SOURCES=(scripts/sim_main.cpp)
 
