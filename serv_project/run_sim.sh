@@ -25,6 +25,15 @@
 #    ./run_sim.sh --clear                      Clear all the log files
 #    ./run_sim.sh --build --run                Build then simulate
 #    ./run_sim.sh --firmware=my.hex            Use a different firmware
+#    ./run_sim.sh --serv-dir=fusesoc_libraries/serv_bne   Use another SERV variant
+#
+#  SERV variant selection (SERV_DIR):
+#    Default : fusesoc_libraries/serv      (popcount custom-instruction SERV)
+#    BNE     : fusesoc_libraries/serv_bne  (teammate's conditional-branch
+#              early-exit SERV)
+#    Override via --serv-dir=<path> or the SERV_DIR environment variable.
+#    The two variants differ only in RTL: serv/ has serv_customized_{alu,state}.v,
+#    serv_bne/ has serv_bne_early.v; the rest of the file list is shared.
 #
 #  Pipeline steps:
 #    [1/4] CLEAN        Remove obj_dir_custom/
@@ -54,6 +63,10 @@ BUILD_DIR="obj_dir_custom"
 BINARY="./${BUILD_DIR}/Vservant_sim"
 FIRMWARE="firmware.hex"
 
+# SERV RTL variant (popcount vs BNE early-exit). Overridable via
+# --serv-dir=... or the SERV_DIR environment variable.
+SERV_DIR="${SERV_DIR:-fusesoc_libraries/serv}"
+
 # ── Parse arguments ──────────────────────────────────────────
 DO_CLEAN=false
 DO_BUILD=false
@@ -74,8 +87,9 @@ for arg in "$@"; do
         --run)      DO_RUN=true ;;
         --clear)    DO_CLEAR=true ;;
         --firmware=*) FIRMWARE="${arg#*=}" ;;
+        --serv-dir=*) SERV_DIR="${arg#*=}" ;;
         -h|--help)
-            echo "Usage: $0 [--clean] [--build] [--run] [--clear] [--firmware=FILE]"
+            echo "Usage: $0 [--clean] [--build] [--run] [--clear] [--firmware=FILE] [--serv-dir=DIR]"
             echo ""
             echo "  No args       → clean + build + run (default)"
             echo "  --clean       → remove build artifacts only"
@@ -83,6 +97,8 @@ for arg in "$@"; do
             echo "  --run         → run without rebuilding"
             echo "  --clear       → remove log files and VCD"
             echo "  --firmware=X  → use X as firmware (default: firmware.hex)"
+            echo "  --serv-dir=DIR→ SERV RTL dir (default: fusesoc_libraries/serv;"
+            echo "                  use fusesoc_libraries/serv_bne for the BNE variant)"
             exit 0
             ;;
         *)
@@ -93,40 +109,54 @@ for arg in "$@"; do
     esac
 done
 
+if [[ ! -d "$SERV_DIR" ]]; then
+    echo "[ERROR] SERV RTL dir not found: $SERV_DIR"
+    echo "  Use --serv-dir=... to point at a valid SERV variant."
+    exit 1
+fi
+
 # ── Verilog source list ──────────────────────────────────────
 VERILOG_SOURCES=(
-    fusesoc_libraries/serv/bench/servant_sim.v
-    fusesoc_libraries/serv/servant/servant.v
-    fusesoc_libraries/serv/servant/servant_mux.v
-    fusesoc_libraries/serv/servant/servant_ram.v
-    fusesoc_libraries/serv/servant/servant_gpio.v
-    fusesoc_libraries/serv/servant/servant_timer.v
-    fusesoc_libraries/serv/servile/servile.v
-    fusesoc_libraries/serv/servile/servile_mux.v
-    fusesoc_libraries/serv/servile/servile_arbiter.v
-    fusesoc_libraries/serv/servile/servile_rf_mem_if.v
-    fusesoc_libraries/serv/rtl/serv_top.v
-    fusesoc_libraries/serv/rtl/serv_state.v
-    fusesoc_libraries/serv/rtl/serv_customized_state.v
-    fusesoc_libraries/serv/rtl/serv_decode.v
-    fusesoc_libraries/serv/rtl/serv_ctrl.v
-    fusesoc_libraries/serv/rtl/serv_alu.v
-    fusesoc_libraries/serv/rtl/serv_customized_alu.v
-    fusesoc_libraries/serv/rtl/serv_immdec.v
-    fusesoc_libraries/serv/rtl/serv_bufreg.v
-    fusesoc_libraries/serv/rtl/serv_bufreg2.v
-    fusesoc_libraries/serv/rtl/serv_csr.v
-    fusesoc_libraries/serv/rtl/serv_mem_if.v
-    fusesoc_libraries/serv/rtl/serv_rf_top.v
-    fusesoc_libraries/serv/rtl/serv_rf_if.v
-    fusesoc_libraries/serv/rtl/serv_rf_ram.v
-    fusesoc_libraries/serv/rtl/serv_rf_ram_if.v
-    fusesoc_libraries/serv/rtl/serv_compdec.v
-    fusesoc_libraries/serv/rtl/serv_aligner.v
-    fusesoc_libraries/serv/rtl/serv_debug.v
-    fusesoc_libraries/serv/bench/servant_tb.v
-    fusesoc_libraries/serv/bench/uart_decoder.v
+    ${SERV_DIR}/bench/servant_sim.v
+    ${SERV_DIR}/servant/servant.v
+    ${SERV_DIR}/servant/servant_mux.v
+    ${SERV_DIR}/servant/servant_ram.v
+    ${SERV_DIR}/servant/servant_gpio.v
+    ${SERV_DIR}/servant/servant_timer.v
+    ${SERV_DIR}/servile/servile.v
+    ${SERV_DIR}/servile/servile_mux.v
+    ${SERV_DIR}/servile/servile_arbiter.v
+    ${SERV_DIR}/servile/servile_rf_mem_if.v
+    ${SERV_DIR}/rtl/serv_top.v
+    ${SERV_DIR}/rtl/serv_state.v
+    ${SERV_DIR}/rtl/serv_decode.v
+    ${SERV_DIR}/rtl/serv_ctrl.v
+    ${SERV_DIR}/rtl/serv_alu.v
+    ${SERV_DIR}/rtl/serv_immdec.v
+    ${SERV_DIR}/rtl/serv_bufreg.v
+    ${SERV_DIR}/rtl/serv_bufreg2.v
+    ${SERV_DIR}/rtl/serv_csr.v
+    ${SERV_DIR}/rtl/serv_mem_if.v
+    ${SERV_DIR}/rtl/serv_rf_top.v
+    ${SERV_DIR}/rtl/serv_rf_if.v
+    ${SERV_DIR}/rtl/serv_rf_ram.v
+    ${SERV_DIR}/rtl/serv_rf_ram_if.v
+    ${SERV_DIR}/rtl/serv_compdec.v
+    ${SERV_DIR}/rtl/serv_aligner.v
+    ${SERV_DIR}/rtl/serv_debug.v
+    ${SERV_DIR}/bench/servant_tb.v
+    ${SERV_DIR}/bench/uart_decoder.v
 )
+
+# Variant-specific RTL: popcount (serv) vs BNE early-exit (serv_bne)
+if [[ "$SERV_DIR" == *bne* ]]; then
+    VERILOG_SOURCES+=(${SERV_DIR}/rtl/serv_bne_early.v)
+else
+    VERILOG_SOURCES+=(
+        ${SERV_DIR}/rtl/serv_customized_state.v
+        ${SERV_DIR}/rtl/serv_customized_alu.v
+    )
+fi
 
 CPP_SOURCES=(scripts/sim_main.cpp)
 

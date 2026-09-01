@@ -21,6 +21,14 @@
 #    ./build.sh --build --run         Compile then simulate
 #    ./build.sh --clear               Remove build artifacts
 #    ./build.sh --folder=Wk3 --build  Build from SERV_codespace/Wk3/ instead
+#    ./build.sh --serv-dir=fusesoc_libraries/serv_bne --build   Use BNE SERV variant
+#
+#  SERV variant selection (SERV_DIR):
+#    Default : fusesoc_libraries/serv      (popcount custom-instruction SERV)
+#    BNE     : fusesoc_libraries/serv_bne  (teammate's conditional-branch
+#              early-exit SERV)
+#    Override via --serv-dir=<path> or the SERV_DIR environment variable.
+#    Used for sw/link.ld and sw/makehex.py.
 #
 #  Default folder mode:
 #    Without --folder, auto-discovers sources from
@@ -48,6 +56,9 @@ set -euo pipefail
 FOLDER=""
 DEFAULT_FOLDER="build_codes"
 SERV_CODESPACE="../Codespace/SERV_codespace"
+# SERV RTL variant (popcount vs BNE early-exit). Overridable via --serv-dir=...
+# or the SERV_DIR environment variable. Used for sw/link.ld and sw/makehex.py.
+SERV_DIR="${SERV_DIR:-fusesoc_libraries/serv}"
 # ──────────────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────────────
 
@@ -75,8 +86,8 @@ ABI=ilp32
 COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
 INCLUDES="-I$SCRIPT_DIR/../Codespace"
 CFLAGS="-O2 $COMMON_FLAGS $INCLUDES"
-LDSCRIPT="fusesoc_libraries/serv/sw/link.ld"
-MAKEHEX="fusesoc_libraries/serv/sw/makehex.py"
+LDSCRIPT="$SERV_DIR/sw/link.ld"
+MAKEHEX="$SERV_DIR/sw/makehex.py"
 
 # ── Output files ─────────────────────────────────────────────
 ELF="firmware.elf"
@@ -273,12 +284,15 @@ do_clear() {
 #  Main: parse command-line arguments
 # ══════════════════════════════════════════════════════════════
 usage() {
-    echo "Usage: $0 [--folder=NAME] [--build] [--run] [--clear]"
+    echo "Usage: $0 [--folder=NAME] [--serv-dir=DIR] [--build] [--run] [--clear]"
     echo ""
-    echo "  --folder=NAME  Build from Codespace/SERV_codespace/NAME/ (default: build_codes/)"
-    echo "  --build        Compile firmware (deduplicates sources automatically)"
-    echo "  --run          Launch Verilator simulation"
-    echo "  --clear        Remove all build artifacts"
+    echo "  --folder=NAME   Build from Codespace/SERV_codespace/NAME/ (default: build_codes/)"
+    echo "  --serv-dir=DIR  SERV RTL dir for sw/link.ld & sw/makehex.py"
+    echo "                  (default: fusesoc_libraries/serv;"
+    echo "                   use fusesoc_libraries/serv_bne for the BNE variant)"
+    echo "  --build         Compile firmware (deduplicates sources automatically)"
+    echo "  --run           Launch Verilator simulation"
+    echo "  --clear         Remove all build artifacts"
     echo ""
     echo "Default: auto-discovers .s/.S/.c/.cpp files from build_codes/."
     echo "Use --folder to build from a different folder instead."
@@ -287,6 +301,7 @@ usage() {
     echo "  $0 --build                         # compile from build_codes/"
     echo "  $0 --folder=Week_3/Task_2 --build  # compile from Week_3/Task_2/"
     echo "  $0 --folder=fib --build --run      # compile + simulate from fib/"
+    echo "  $0 --serv-dir=fusesoc_libraries/serv_bne --build   # BNE SERV variant"
     echo "  $0 --clear                         # clear artifacts"
 }
 
@@ -301,6 +316,7 @@ DO_RUN=false
 for arg in "$@"; do
     case "$arg" in
         --folder=*) FOLDER="${arg#*=}" ;;
+        --serv-dir=*) SERV_DIR="${arg#*=}" ;;
         --build)    DO_BUILD=true ;;
         --run)      DO_RUN=true ;;
         --clear)    do_clear; exit 0 ;;
