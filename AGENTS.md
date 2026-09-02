@@ -174,4 +174,7 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 
 - `log/A_v1_origin.txt` — v1 on 原始 SERV，Total cycles 526208
 - `log/B_v1_bne.txt` — v1 on BNE，Total cycles 493157
-- `log/C_v2_popcount.txt` — v2 on popcount，Total cycles 499281
+- `log/C_v2_popcount_v1rtl.txt` — **C 官方测量**：v2 on v1 RTL（`serv_rtl_v1`，68-cycle .insn），Total cycles 493448 ← 用这个
+- `log/C_v2_popcount.txt` — **作废**（v1.5 writeback bug 污染测量），v2 on v1.5，499281，仅供对照
+
+> 注意：v1 RTL 虽然 `.insn` 是 68 cycles（v1.5 是 42），但总周期反而更低（493448 < 499281），因为 v1 **没有** v1.5 的写回串行化（后续指令不被拖慢 ~27 拍）。v1.5 的写回 bug 代价真实存在，是下一步优化要解决的目标。
