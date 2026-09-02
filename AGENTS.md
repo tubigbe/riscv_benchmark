@@ -8,6 +8,22 @@
 
 **Status: ACHIEVED** — the custom popcount instruction now runs at **42 cycles** and produces correct results (verified by memory store + UART print). Saved as git tag **`v1.5_temp`**.
 
+## ⚠️ IMPORTANT — 优化范围（先看这个）
+
+**下一步优化只需看一个文件夹的 RTL**：
+```
+serv_project/fusesoc_libraries/serv/rtl/   ← 只改这里的 .v 文件
+```
+
+**不要看**（它们不是优化目标，读了浪费时间）：
+- `serv_project/fusesoc_libraries/serv_bne/`（队友的 BNE 早退版，另一个优化方向）
+- `serv_project/fusesoc_libraries/serv_rtl_origin/`（原始 SERV，无优化）
+- `serv/rtl/` 之外的子目录：`serv/servile/`、`serv/servant/`、`serv/bench/`、`serv/sw/`（是通用基础设施/测试台，只读不改）
+- `Codespace/`、`serv_project/scripts/`、其它顶层目录
+
+> 涉及 popcount 写回的核心文件：`serv_state.v`、`serv_top.v`、`serv_rf_ram_if.v`、`serv_customized_alu.v`、`serv_customized_state.v`（都在 `serv/rtl/` 里）。
+> 一个例外：`servile/servile.v` 里有 `i_rf_wr_busy` 的接线（真实数据路径），改 `serv_rf_ram_if`/`serv_top` 端口时要同步确认它。
+
 ## Current Design (v1.5_temp, commit `32f3f64`)
 
 The popcount instruction is a custom 2-stage instruction:
@@ -123,3 +139,39 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 - `log/compare_result.txt` — Merged trace with per-instruction cycle info and summary stats
 - `log/sim_wave.vcd` — full waveform (GTKWave) for RTL debugging
 - `log/popcount_test.txt` — popcount test results (pass/fail per value)
+
+## Next Optimization Direction (2026-09-02) — 写回串行化
+
+### 问题
+
+`.insn`（popcount）自身 42 cycles ✓，但**紧随其后的指令被写回拖慢 ~27 拍**：
+
+- 证据：C 测量（`log/C_v2_popcount.txt`）里，紧跟 `.insn`（0x138）的 `not`（0x13c）是 **63 cycles**，而前面是普通 `and` 的 `not`（0x130）是 **36 cycles**。
+- A/B 测量（原始/BNE，无 popcount）里 `not` 全是 36。
+- 原因：popcount 写回窗口 `custom_wr_active`（36 拍）期间，下一条指令的 RF 读被 `rf_rreq_pending` 延迟到 `i_rf_wr_busy` 清掉才开始 → 有效周期 36 + 27 写回等待 = 63。
+
+### 目标
+
+让 popcount 写回和后续指令执行**真正重叠**，收回那 ~27 拍。`.insn` 有效成本目前 ≈ 42 + 27 = ~69，重叠后应回到 ~42 附近。
+
+### 难点（之前踩过的坑）
+
+- 之前尝试"不延迟 RF 读"（去掉串行化）→ 写回被后续指令的读重置 `rcnt`，**结果写错**（0x4AC8 之类）。
+- 所以不能简单删 `rf_rreq_pending`；需要更精细的 RF 读写协调。
+
+### 候选思路（未验证）
+
+1. **RF 读写解耦**：给 `serv_rf_ram_if` 的读/写用独立的计数器/时序，让读可以在写回进行中发起而不重置写回的 `rcnt` 对齐。改动在 `serv/rtl/serv_rf_ram_if.v`。
+2. **写回数据与 `o_rd` 解耦**：已实现（`o_wdata0 = custom_wr_active ? cus_serial : rf_wdata0`）。若读写能解耦，后续指令的 ALU 在 `o_rd` 上活动就不会污染写回。
+3. **缩短写回窗口**：`custom_wr_active` 现在 36 拍（覆盖整个 32-bit 串行 RF 写）。能否只在 count 移出那 6 拍写低字、高位强制清零，缩短窗口？需要改 `serv_top.v` 的 `o_wen0`/`o_wreg0`/`o_wdata0` 逻辑 + `serv_rf_ram_if.v`。
+
+### 验证方法
+
+- 复现：`./serv_project/run_sim.sh --serv-dir=fusesoc_libraries/serv`（popcount 版）跑 v2 固件，看 `log/compare_result.txt` 里 `.insn` 后一条指令是否仍 ~63。
+- 目标：改完后下一条指令回到 ~36-40，且 popcount 结果仍正确（`C` 测量 total cycles 应明显下降）。
+
+### 相关测量存档
+
+- `log/A_v1_origin.txt` — v1 on 原始 SERV，Total cycles 526208
+- `log/B_v1_bne.txt` — v1 on BNE，Total cycles 493157
+- `log/C_v2_popcount.txt` — v2 on popcount，Total cycles 499281
