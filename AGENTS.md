@@ -39,7 +39,7 @@ The popcount instruction is a custom 2-stage instruction:
 - At `custom_stage2_done`: the counter (`o_cnt` + `cnt_lsb`) is cleared (so the next instruction starts at count 0), and `ibus_cyc` is asserted to **early-fetch** the next instruction.
 - `init_done` is **held** at `custom_stage2_done` and cleared on the early fetch's `i_ibus_ack` — this prevents the custom instruction from re-entering stage 1 (which would re-fire `o_rf_wreq` in a loop).
 - `o_rf_wreq = ... | (i_is_customized & last_init)` — the write is triggered **once** at the stage-1→2 boundary (`last_init`).
-- `o_rf_rreq` is deferred while the RF writeback is busy (`rf_rreq_pending`, gated by `i_rf_wr_busy`) so the next instruction's read does not reset `rcnt` mid-write.
+- `o_rf_rreq` is deferred only while the **custom** writeback is draining (`custom_wr_drain`, set on `o_rf_wreq & i_is_customized`, cleared on `!i_rf_wr_busy`) so the next instruction's read does not reset `rcnt` mid-write. Ordinary writeback ops (branch/jump/lw/sw/shift) also raise `i_rf_wr_busy` but are NOT deferred (original SERV tolerated them — see bug 7).
 
 ### Writeback (serv_top.v — bypasses the main ALU)
 
@@ -72,6 +72,7 @@ serv_rf_ram_if.o_wr_busy → rf_wr_busy → serv_top.i_rf_wr_busy
 4. **`o_wen0` gated by `i_cnt_en`** — after stage 2 the counter is cleared so only the low 6 bits were written; upper 26 bits kept the old value (`0x4AC8`). Fixed by forcing `o_wen0` high during `custom_wr_active`.
 5. **Write register stolen by next instruction** — `o_wreg0` changed to the next instr's rd mid-write; fixed by latching `custom_rd`.
 6. **Custom instruction re-entering stage 1** — `init_done` cleared at stage-2 end made `o_init` flip back to 1, re-running the counter and re-firing `o_rf_wreq` forever. Fixed by holding `init_done` until the early fetch's `i_ibus_ack`.
+7. **Global +1 on every writeback op's successor (v1.5 structural regression)** — deferring `o_rf_rreq` on the raw `i_rf_wr_busy` applied to ALL instructions, but ordinary writeback ops (branch/jump/lw/sw/shift/`.insn`) also assert `o_rf_wreq` → `wr_busy` → the next instruction's read was held 1 cycle. On identical v2 firmware, **5853/8381 instructions ran +1** vs v1 RTL (70%!), everywhere in the code, independent of popcount — proof the v1.5 writeback machinery had broken the original SERV state structure. **Fix (2026-09-03)**: added `custom_wr_drain` in serv_state.v — defer the read ONLY while the custom writeback is draining. Result: total 499281 → **493488**, all 8341 ordinary instructions cycle-identical to v1 RTL.
 
 ## Key RTL Signals
 
@@ -80,8 +81,9 @@ serv_rf_ram_if.o_wr_busy → rf_wr_busy → serv_top.i_rf_wr_busy
 | `custom_stage2_done` | serv_state.v | stage-2 count 5 (6-cycle end) |
 | `o_serial` / `cus_serial` | serv_customized_alu.v / serv_top.v | raw serial count bits (`pr_partial[0]`) |
 | `custom_wr_active` / `wr_timer` / `custom_rd` | serv_top.v | one-shot writeback window + latched rd |
+| `custom_wr_drain` | serv_state.v | custom writeback still draining (defer next read only then) |
 | `o_wr_busy` / `i_rf_wr_busy` | serv_rf_ram_if.v / servile.v / serv_state.v | RF writeback in progress |
-| `rf_rreq_pending` | serv_state.v | deferred read during writeback |
+| `rf_rreq_pending` | serv_state.v | deferred read while custom writeback draining |
 
 ## Key Files & Commands
 
@@ -127,7 +129,7 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 
 ## Git State
 
-- **serv repo** (RTL): tag **`v1.5_temp`** = commit `32f3f64` (current working design). Earlier: `29e4e38` (gating removal), `6a7f684` (initial fixed-6-cycle), `f808bc5` (v1.5 broken).
+- **serv repo** (RTL): tag **`v1.5_temp`** = commit `32f3f64`. **Working tree has an uncommitted fix on top** (`serv_state.v`: `custom_wr_drain` scoping, bug 7, 2026-09-03) — 499281 → 493488. Earlier: `29e4e38` (gating removal), `6a7f684` (initial fixed-6-cycle), `f808bc5` (v1.5 broken).
 - **top repo** (firmware/scripts): main = `b0a8fd0`.
 - v1 RTL snapshot kept at `serv_project/serv_rtl_v1/` (gitignored); results saved as `log/v1_results` (68 cyc/insn, 666 total) and `log/v1.5_results` (42 cyc/insn, 614 total).
 - `Codespace/SERV_codespace/Codehub/popcount.c` — older software/custom comparison test (reference only).
@@ -140,19 +142,19 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 - `log/sim_wave.vcd` — full waveform (GTKWave) for RTL debugging
 - `log/popcount_test.txt` — popcount test results (pass/fail per value)
 
-## Next Optimization Direction (2026-09-02) — 写回串行化
+## Next Optimization Direction (2026-09-03) — 写回串行化（已收窄）
 
-### 问题
+### 问题（2026-09-02 原版 → 2026-09-03 已修复全局 +1，见 bug 7）
 
-`.insn`（popcount）自身 42 cycles ✓，但**紧随其后的指令被写回拖慢 ~27 拍**：
+`.insn`（popcount）自身 42 cycles ✓，但**紧随其后的那一条指令被写回拖慢 ~28 拍**：
 
-- 证据：C 测量（`log/C_v2_popcount.txt`）里，紧跟 `.insn`（0x138）的 `not`（0x13c）是 **63 cycles**，而前面是普通 `and` 的 `not`（0x130）是 **36 cycles**。
+- 证据：`log/C_v2_popcount_v15fixed.txt`（修复后的 v1.5）里，紧跟 `.insn`（0x138）的 `not`（0x13c）是 **64 cycles**，而前面是普通 `and` 的 `not`（0x130）是 **36 cycles**。**只有紧跟 `.insn` 的那一条**受影响（20 条，全是 `not`/`add`），其余 8341 条普通指令与 v1 RTL 逐拍一致。
 - A/B 测量（原始/BNE，无 popcount）里 `not` 全是 36。
-- 原因：popcount 写回窗口 `custom_wr_active`（36 拍）期间，下一条指令的 RF 读被 `rf_rreq_pending` 延迟到 `i_rf_wr_busy` 清掉才开始 → 有效周期 36 + 27 写回等待 = 63。
+- 原因：popcount 写回窗口 `custom_wr_active`（36 拍）在指令自身结束后仍在 drain（带外写回），下一条指令的 RF 读被 `rf_rreq_pending`（现在只在 `custom_wr_drain` 期间挂起）延迟到写回清掉才开始 → 36 + ~28 写回等待 = 64。
 
 ### 目标
 
-让 popcount 写回和后续指令执行**真正重叠**，收回那 ~27 拍。`.insn` 有效成本目前 ≈ 42 + 27 = ~69，重叠后应回到 ~42 附近。
+让 popcount 写回和后续指令执行**真正重叠**，收回那 ~28 拍。`.insn` 有效成本目前 ≈ 42 + 28 = ~70，重叠后应回到 ~42 附近。当前修复版总周期 493488 ≈ v1 RTL 的 493448（差 40 = 20×(.insn 省 26 - 跟随者多付 28)），popcount 本身快但写回串行化把它抵消了。
 
 ### 难点（之前踩过的坑）
 
@@ -173,8 +175,10 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 ### 相关测量存档
 
 - `log/A_v1_origin.txt` — v1 on 原始 SERV，Total cycles 526208
+- `log/D_v1_fixed15.txt` — v1 on v1.5_fixed，Total cycles 526208（9013 条与 A 逐行 **0 差** → 纯 RV32I 路径与原版完全一致，作为修复正确性的回归证据）
 - `log/B_v1_bne.txt` — v1 on BNE，Total cycles 493157
 - `log/C_v2_popcount_v1rtl.txt` — **C 官方测量**：v2 on v1 RTL（`serv_rtl_v1`，68-cycle .insn），Total cycles 493448 ← 用这个
+- `log/C_v2_popcount_v15fixed.txt` — v2 on 修复后的 v1.5（`custom_wr_drain` fix），.insn 42，Total cycles 493488（全局 +1 已除，仅 20 条跟随者付写回串行化）
 - `log/C_v2_popcount.txt` — **作废**（v1.5 writeback bug 污染测量），v2 on v1.5，499281，仅供对照
 
-> 注意：v1 RTL 虽然 `.insn` 是 68 cycles（v1.5 是 42），但总周期反而更低（493448 < 499281），因为 v1 **没有** v1.5 的写回串行化（后续指令不被拖慢 ~27 拍）。v1.5 的写回 bug 代价真实存在，是下一步优化要解决的目标。
+> 注意：v1 RTL 虽然 `.insn` 是 68 cycles（v1.5 是 42），但总周期反而略低（493448 < 493488），因为 v1 **没有** v1.5 的写回串行化（后续指令不被拖慢 ~28 拍）。v1.5 的写回串行化代价真实存在，是下一步优化要解决的目标。
