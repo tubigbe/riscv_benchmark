@@ -25,7 +25,7 @@ volatile static unsigned int popcnt_custom(unsigned int val) {
 }
 
 int main(void){
-    uint32_t reg_x1 = 0x0fffffff;
+    uint32_t reg_x1 = 0x000fffff;
 
     popcount_sink = popcnt_custom(reg_x1);
 

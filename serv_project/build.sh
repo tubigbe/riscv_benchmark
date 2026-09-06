@@ -24,7 +24,7 @@
 #    ./build.sh --serv-dir=fusesoc_libraries/serv_bne --build   Use BNE SERV variant
 #
 #  SERV variant selection (SERV_DIR):
-#    Default : fusesoc_libraries/serv      (popcount custom-instruction SERV)
+#    Default : fusesoc_libraries/serv_v1.5_rtl   (v1.5 in-window-writeback custom-popcount SERV)
 #    BNE     : fusesoc_libraries/serv_bne  (teammate's conditional-branch
 #              early-exit SERV)
 #    Override via --serv-dir=<path> or the SERV_DIR environment variable.
@@ -58,7 +58,7 @@ DEFAULT_FOLDER="build_codes"
 SERV_CODESPACE="../Codespace/SERV_codespace"
 # SERV RTL variant (popcount vs BNE early-exit). Overridable via --serv-dir=...
 # or the SERV_DIR environment variable. Used for sw/link.ld and sw/makehex.py.
-SERV_DIR="${SERV_DIR:-fusesoc_libraries/serv}"
+SERV_DIR="${SERV_DIR:-fusesoc_libraries/serv_v1.5_rtl}"
 # ──────────────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────────────
 
@@ -288,7 +288,7 @@ usage() {
     echo ""
     echo "  --folder=NAME   Build from Codespace/SERV_codespace/NAME/ (default: build_codes/)"
     echo "  --serv-dir=DIR  SERV RTL dir for sw/link.ld & sw/makehex.py"
-    echo "                  (default: fusesoc_libraries/serv;"
+    echo "                  (default: fusesoc_libraries/serv_v1.5_rtl;"
     echo "                   use fusesoc_libraries/serv_bne for the BNE variant)"
     echo "  --build         Compile firmware (deduplicates sources automatically)"
     echo "  --run           Launch Verilator simulation"

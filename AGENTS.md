@@ -6,25 +6,27 @@
 
 **Key goal**: Reduce custom popcount instruction cycle count from **68 cycles** to **≤50 cycles**.
 
-**Status: ACHIEVED** — the custom popcount instruction now runs at **42 cycles** and produces correct results (verified by memory store + UART print). Saved as git tag **`v1.5_temp`**.
+**Status: ACHIEVED** — the custom popcount instruction runs at **42 cycles** with an **in-window writeback**: rd comes out clean (no high-bit garbage) and the following instruction is **not slowed at all**. v2 (random_forest) measurement: Total cycles **492928** = v1 RTL (493448) − 20×(68−42), row-identical to v1 RTL except the 20 `.insn` rows. Saved as git tag **`v1.5_lucky`** (commit `271570b`).
 
-## ⚠️ IMPORTANT — 优化范围（先看这个）
+## ⚠️ IMPORTANT — Optimization scope (read this first)
 
-**下一步优化只需看一个文件夹的 RTL**：
+**Only ONE folder of RTL needs to be edited for further optimization**:
 ```
-serv_project/fusesoc_libraries/serv/rtl/   ← 只改这里的 .v 文件
+serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/   ← edit only the .v files here
 ```
 
-**不要看**（它们不是优化目标，读了浪费时间）：
-- `serv_project/fusesoc_libraries/serv_bne/`（队友的 BNE 早退版，另一个优化方向）
-- `serv_project/fusesoc_libraries/serv_rtl_origin/`（原始 SERV，无优化）
-- `serv/rtl/` 之外的子目录：`serv/servile/`、`serv/servant/`、`serv/bench/`、`serv/sw/`（是通用基础设施/测试台，只读不改）
-- `Codespace/`、`serv_project/scripts/`、其它顶层目录
+**Do NOT read** (they are not optimization targets; reading them wastes time):
+- `serv_project/fusesoc_libraries/serv_bne/` (teammate's BNE early-exit variant, a different optimization direction)
+- `serv_project/fusesoc_libraries/serv_rtl_origin/` (original SERV, unoptimized)
+- Subdirectories outside `serv/rtl/`: `serv/servile/`, `serv/servant/`, `serv/bench/`, `serv/sw/` (shared infrastructure / testbenches — read-only, do not change)
+- `Codespace/`, `serv_project/scripts/`, and other top-level directories
 
-> 涉及 popcount 写回的核心文件：`serv_state.v`、`serv_top.v`、`serv_rf_ram_if.v`、`serv_customized_alu.v`、`serv_customized_state.v`（都在 `serv/rtl/` 里）。
-> 一个例外：`servile/servile.v` 里有 `i_rf_wr_busy` 的接线（真实数据路径），改 `serv_rf_ram_if`/`serv_top` 端口时要同步确认它。
+> Core files for the popcount writeback: `serv_state.v`, `serv_top.v`, `serv_rf_ram_if.v`, `serv_customized_alu.v`, `serv_customized_state.v` (all under `serv/rtl/`).
+> One exception: `servile/servile.v` contains the `i_rf_wr_busy` wiring (the real datapath); if you change `serv_rf_ram_if`/`serv_top` ports, check it in sync.
 
-## Current Design (v1.5_temp, commit `32f3f64`)
+## Current Design (v1.5_temp, commit `32f3f64`) — HISTORICAL: writeback superseded by v1.5_lucky
+
+> ⚠️ The `custom_wr_active`/`wr_timer`/`custom_rd` out-of-band 36-cycle writeback described here is the **old mechanism**, removed in v1.5_lucky (commit `271570b`) and replaced by the "in-window writeback" (stage1 zero-fill + stage2 count write; see the **v1.5_lucky** section at the end). The stage1/stage2/`custom_stage2_done`/early-fetch structure is still valid.
 
 The popcount instruction is a custom 2-stage instruction:
 
@@ -41,9 +43,9 @@ The popcount instruction is a custom 2-stage instruction:
 - `o_rf_wreq = ... | (i_is_customized & last_init)` — the write is triggered **once** at the stage-1→2 boundary (`last_init`).
 - `o_rf_rreq` is deferred only while the **custom** writeback is draining (`custom_wr_drain`, set on `o_rf_wreq & i_is_customized`, cleared on `!i_rf_wr_busy`) so the next instruction's read does not reset `rcnt` mid-write. Ordinary writeback ops (branch/jump/lw/sw/shift) also raise `i_rf_wr_busy` but are NOT deferred (original SERV tolerated them — see bug 7).
 
-### Writeback (serv_top.v — bypasses the main ALU)
+### Writeback (serv_top.v — bypasses the main ALU) — superseded by v1.5_lucky
 
-The popcount result is **not** routed through the main ALU. Instead:
+The popcount result is **not** routed through the main ALU. Instead (old scheme):
 
 - `cus_alu.o_serial = pr_partial[0]` feeds `o_wdata0` directly.
 - `custom_wr_active` is a **36-cycle one-shot** (set at `o_rf_wreq & is_customized & !custom_wr_active`, never re-triggered) that covers the whole serial RF write window.
@@ -80,7 +82,7 @@ serv_rf_ram_if.o_wr_busy → rf_wr_busy → serv_top.i_rf_wr_busy
 |---|---|---|
 | `custom_stage2_done` | serv_state.v | stage-2 count 5 (6-cycle end) |
 | `o_serial` / `cus_serial` | serv_customized_alu.v / serv_top.v | raw serial count bits (`pr_partial[0]`) |
-| `custom_wr_active` / `wr_timer` / `custom_rd` | serv_top.v | one-shot writeback window + latched rd |
+| `custom_win` | serv_top.v | in-window writeback window (stage1+stage2) |
 | `custom_wr_drain` | serv_state.v | custom writeback still draining (defer next read only then) |
 | `o_wr_busy` / `i_rf_wr_busy` | serv_rf_ram_if.v / servile.v / serv_state.v | RF writeback in progress |
 | `rf_rreq_pending` | serv_state.v | deferred read while custom writeback draining |
@@ -119,17 +121,17 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 
 ### RTL Files of Interest
 
-- `serv_project/fusesoc_libraries/serv/rtl/serv_customized_alu.v` — 6-bit `pr_partial` accumulator, `o_serial` output
-- `serv_project/fusesoc_libraries/serv/rtl/serv_customized_state.v` — `i_init` → `o_mode`/`o_clr` (mode gated on `i_cnt_en`)
-- `serv_project/fusesoc_libraries/serv/rtl/serv_state.v` — stage-2 control, counter, write/read requests
-- `serv_project/fusesoc_libraries/serv/rtl/serv_top.v` — writeback bypass mux (`o_wdata0`/`o_wen0`/`o_wreg0`)
-- `serv_project/fusesoc_libraries/serv/rtl/serv_rf_ram_if.v` — `o_wr_busy`
-- `serv_project/fusesoc_libraries/serv/servile/servile.v` — **real** datapath wiring of `i_rf_wr_busy`
-- `serv_project/fusesoc_libraries/serv/rtl/serv_decode.v` — identifies custom instructions (opcode `01010`)
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/serv_customized_alu.v` — 6-bit `pr_partial` accumulator, `o_serial` output
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/serv_customized_state.v` — `i_init` → `o_mode`/`o_clr` (mode gated on `i_cnt_en`)
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/serv_state.v` — stage-2 control, counter, write/read requests
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/serv_top.v` — in-window writeback (`o_wdata0`/`o_wen0`/`o_wreg0`, `custom_win`)
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/serv_rf_ram_if.v` — `o_wr_busy`, `wr_busy_cnt`
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/servile/servile.v` — **real** datapath wiring of `i_rf_wr_busy`
+- `serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/serv_decode.v` — identifies custom instructions (opcode `01010`)
 
 ## Git State
 
-- **serv repo** (RTL): tag **`v1.5_temp`** = commit `32f3f64`. **Working tree has an uncommitted fix on top** (`serv_state.v`: `custom_wr_drain` scoping, bug 7, 2026-09-03) — 499281 → 493488. Earlier: `29e4e38` (gating removal), `6a7f684` (initial fixed-6-cycle), `f808bc5` (v1.5 broken).
+- **serv repo** (RTL): tag **`v1.5_lucky`** = commit `271570b` (in-window writeback; see section at end). Chain: `fe99b81` (bug-7 custom_wr_drain scope fix, 499281→493488) → `5e5ee9a` (force-stop writeback probe: follower 98→70 but rd high bits garbage) → `271570b` (in-window writeback: stage1 zero-fill + stage2 count write; rd clean and follower has no stall). Earlier: `32f3f64`=v1.5_temp, `29e4e38`, `6a7f684`, `f808bc5`.
 - **top repo** (firmware/scripts): main = `b0a8fd0`.
 - v1 RTL snapshot kept at `serv_project/serv_rtl_v1/` (gitignored); results saved as `log/v1_results` (68 cyc/insn, 666 total) and `log/v1.5_results` (42 cyc/insn, 614 total).
 - `Codespace/SERV_codespace/Codehub/popcount.c` — older software/custom comparison test (reference only).
@@ -142,43 +144,59 @@ UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `s
 - `log/sim_wave.vcd` — full waveform (GTKWave) for RTL debugging
 - `log/popcount_test.txt` — popcount test results (pass/fail per value)
 
-## Next Optimization Direction (2026-09-03) — 写回串行化（已收窄）
+## Historical direction (2026-09-03) — writeback serialization — ✅ RESOLVED by v1.5_lucky (see section at end)
 
-### 问题（2026-09-02 原版 → 2026-09-03 已修复全局 +1，见 bug 7）
+### Problem (2026-09-02 original → 2026-09-03 global +1 fixed, see bug 7)
 
-`.insn`（popcount）自身 42 cycles ✓，但**紧随其后的那一条指令被写回拖慢 ~28 拍**：
+`.insn` (popcount) itself is 42 cycles ✓, but **the single instruction right after it is slowed by ~28 cycles**:
 
-- 证据：`log/C_v2_popcount_v15fixed.txt`（修复后的 v1.5）里，紧跟 `.insn`（0x138）的 `not`（0x13c）是 **64 cycles**，而前面是普通 `and` 的 `not`（0x130）是 **36 cycles**。**只有紧跟 `.insn` 的那一条**受影响（20 条，全是 `not`/`add`），其余 8341 条普通指令与 v1 RTL 逐拍一致。
-- A/B 测量（原始/BNE，无 popcount）里 `not` 全是 36。
-- 原因：popcount 写回窗口 `custom_wr_active`（36 拍）在指令自身结束后仍在 drain（带外写回），下一条指令的 RF 读被 `rf_rreq_pending`（现在只在 `custom_wr_drain` 期间挂起）延迟到写回清掉才开始 → 36 + ~28 写回等待 = 64。
+- Evidence: in `log/C_v2_popcount_v15fixed.txt` (fixed v1.5), the `not` (0x13c) right after `.insn` (0x138) is **64 cycles**, while a `not` after an ordinary `and` (0x130) is **36 cycles**. **Only the instruction immediately after `.insn`** is affected (20 total, all `not`/`add`); the other 8341 ordinary instructions are cycle-identical to v1 RTL.
+- In the A/B measurements (original/BNE, no popcount) every `not` is 36.
+- Cause: the popcount writeback window `custom_wr_active` (36 cycles) kept draining after the instruction itself ended (out-of-band writeback); the next instruction's RF read was deferred by `rf_rreq_pending` (now only during `custom_wr_drain`) until the writeback cleared → 36 + ~28 writeback wait = 64.
 
-### 目标
+### Goal
 
-让 popcount 写回和后续指令执行**真正重叠**，收回那 ~28 拍。`.insn` 有效成本目前 ≈ 42 + 28 = ~70，重叠后应回到 ~42 附近。当前修复版总周期 493488 ≈ v1 RTL 的 493448（差 40 = 20×(.insn 省 26 - 跟随者多付 28)），popcount 本身快但写回串行化把它抵消了。
+Make the popcount writeback **truly overlap** the execution of the following instruction and recover the ~28 cycles. `.insn` effective cost is currently ≈ 42 + 28 = ~70; after overlap it should return to ~42. The fixed version's total is 493488 ≈ v1 RTL's 493448 (difference 40 = 20×(.insn saves 26 − follower pays 28)); popcount is fast but the writeback serialization cancels it out.
 
-### 难点（之前踩过的坑）
+### Difficulties (pitfalls hit before)
 
-- 之前尝试"不延迟 RF 读"（去掉串行化）→ 写回被后续指令的读重置 `rcnt`，**结果写错**（0x4AC8 之类）。
-- 所以不能简单删 `rf_rreq_pending`；需要更精细的 RF 读写协调。
+- Earlier attempt "don't defer the RF read" (remove serialization) → the writeback was reset mid-write by the next instruction's read (`rcnt` reset), **corrupting the result** (e.g. `0x4AC8`).
+- So `rf_rreq_pending` cannot simply be deleted; finer read/write coordination of the RF is needed.
 
-### 候选思路（未验证）
+### Candidate ideas (unverified at the time)
 
-1. **RF 读写解耦**：给 `serv_rf_ram_if` 的读/写用独立的计数器/时序，让读可以在写回进行中发起而不重置写回的 `rcnt` 对齐。改动在 `serv/rtl/serv_rf_ram_if.v`。
-2. **写回数据与 `o_rd` 解耦**：已实现（`o_wdata0 = custom_wr_active ? cus_serial : rf_wdata0`）。若读写能解耦，后续指令的 ALU 在 `o_rd` 上活动就不会污染写回。
-3. **缩短写回窗口**：`custom_wr_active` 现在 36 拍（覆盖整个 32-bit 串行 RF 写）。能否只在 count 移出那 6 拍写低字、高位强制清零，缩短窗口？需要改 `serv_top.v` 的 `o_wen0`/`o_wreg0`/`o_wdata0` 逻辑 + `serv_rf_ram_if.v`。
+1. **Decouple RF read/write**: give `serv_rf_ram_if` independent counters/timing for read and write so a read can start during a writeback without resetting the writeback's `rcnt` alignment. Change in `serv/rtl/serv_rf_ram_if.v`.
+2. **Decouple writeback data from `o_rd`**: already done (`o_wdata0 = custom_wr_active ? cus_serial : rf_wdata0`). If read/write can be decoupled, the next instruction's ALU activity on `o_rd` no longer pollutes the writeback.
+3. **Shorten the writeback window**: `custom_wr_active` is currently 36 cycles (covering the whole 32-bit serial RF write). Could we write only the low words in the 6 count bits and force the high bits to zero, shortening the window? Requires changes to `serv_top.v`'s `o_wen0`/`o_wreg0`/`o_wdata0` logic + `serv_rf_ram_if.v`.
 
-### 验证方法
+### Verification method
 
-- 复现：`./serv_project/run_sim.sh --serv-dir=fusesoc_libraries/serv`（popcount 版）跑 v2 固件，看 `log/compare_result.txt` 里 `.insn` 后一条指令是否仍 ~63。
-- 目标：改完后下一条指令回到 ~36-40，且 popcount 结果仍正确（`C` 测量 total cycles 应明显下降）。
+- Reproduce: `./serv_project/run_sim.sh --serv-dir=fusesoc_libraries/serv_v1.5_rtl` (popcount version) with v2 firmware; check in `log/compare_result.txt` whether the instruction after `.insn` is still ~63.
+- Goal: after the fix the next instruction returns to ~36-40 and the popcount result stays correct (the `C` measurement's total cycles should drop noticeably).
 
-### 相关测量存档
+### Related measurement archives
 
-- `log/A_v1_origin.txt` — v1 on 原始 SERV，Total cycles 526208
-- `log/D_v1_fixed15.txt` — v1 on v1.5_fixed，Total cycles 526208（9013 条与 A 逐行 **0 差** → 纯 RV32I 路径与原版完全一致，作为修复正确性的回归证据）
-- `log/B_v1_bne.txt` — v1 on BNE，Total cycles 493157
-- `log/C_v2_popcount_v1rtl.txt` — **C 官方测量**：v2 on v1 RTL（`serv_rtl_v1`，68-cycle .insn），Total cycles 493448 ← 用这个
-- `log/C_v2_popcount_v15fixed.txt` — v2 on 修复后的 v1.5（`custom_wr_drain` fix），.insn 42，Total cycles 493488（全局 +1 已除，仅 20 条跟随者付写回串行化）
-- `log/C_v2_popcount.txt` — **作废**（v1.5 writeback bug 污染测量），v2 on v1.5，499281，仅供对照
+- `log/A_v1_origin.txt` — v1 on original SERV, Total cycles 526208
+- `log/D_v1_fixed15.txt` — v1 on v1.5_fixed, Total cycles 526208 (9013 lines with **0 diff** vs A row-by-row → the pure RV32I path is exactly identical to the original; regression evidence for the fix's correctness)
+- `log/B_v1_bne.txt` — v1 on BNE, Total cycles 493157
+- `log/C_v2_popcount_v1rtl.txt` — **official C measurement**: v2 on v1 RTL (`serv_rtl_v1`, 68-cycle .insn), Total cycles 493448 ← use this one
+- `log/C_v2_popcount_v15fixed.txt` — v2 on fixed v1.5 (`custom_wr_drain` fix), .insn 42, Total cycles 493488 (global +1 removed; only the 20 followers pay the writeback serialization)
+- `log/C_v2_popcount.txt` — **void** (measurement polluted by the v1.5 writeback bug), v2 on v1.5, 499281, for reference only
 
-> 注意：v1 RTL 虽然 `.insn` 是 68 cycles（v1.5 是 42），但总周期反而略低（493448 < 493488），因为 v1 **没有** v1.5 的写回串行化（后续指令不被拖慢 ~28 拍）。v1.5 的写回串行化代价真实存在，是下一步优化要解决的目标。
+> Note: v1 RTL has `.insn` at 68 cycles (v1.5 at 42) but a slightly LOWER total (493448 < 493488), because v1 has **no** v1.5 writeback serialization (followers are not slowed by ~28 cycles). The v1.5 writeback serialization cost is real and was the target of the next optimization — now resolved by v1.5_lucky.
+
+## v1.5_lucky — In-window writeback (2026-09-03, ✅ done, tag `v1.5_lucky`)
+
+### What was achieved (on top of v1.5_fixed `fe99b81`)
+- **Goal 1 (follower stall) and Goal 2 (rd garbage) solved together**: `.insn` stays at 42 cycles, rd is clean across all 32 bits, and the following instruction has zero stall.
+- Core design: moved the popcount writeback from the "out-of-band 36-cycle window after the instruction" to "completed inside the instruction's own window" (only `serv/rtl/serv_top.v` changed; net −2 flip-flops):
+  1. **stage1 (init=1, 32 cycles)**: `o_wdata0` is driven to 0 and `o_wen0` forced to 1; zeros are streamed into all of rd through the normal serial write port. LSB-first; each word is first read into `rdata0` (~rcnt 2j+1) before its zero-write commits (~rcnt 4+2j) → **rd==rs1 safe** (same mechanism as ordinary ALU rd==rs1).
+  2. At the stage1→2 boundary the retained `o_rf_wreq` resets rcnt → **stage2 (init=0, 6 cycles)** re-aligns and writes the 6-bit count (`cus_serial`) into word0..2.
+  3. `custom_win` (1 flop): set on `is_customized & cnt_en & init`, cleared on `is_customized & !init & cnt_done`; while set `o_wen0=1`, `o_wreg0=rf_wreg0` (immdec holds rd for the whole instruction, so the `custom_rd` latch is deleted); the RF write port is released right after stage 2's last beat.
+  4. Deleted `custom_wr_active`/`wr_timer`/`custom_rd`. `serv_state.v`/`serv_rf_ram_if.v` untouched (`wr_busy_cnt=6` + `custom_wr_drain` kept; wreq is used only for the rcnt re-align and no longer blocks anything now that there is no out-of-band write).
+
+### Verification
+- build_codes (single `.insn`@0x6c, `popcnt x15,x15` of 0x0fffffff → 28): `.insn`=42; follower `sw`=70 (was 98); VCD reconstruction of x15=**0x0000001C** (all 16 words written, upper 26 bits zero); instruction count 1647 exactly matching v1 RTL; total 91094 = v1(91120) − 26.
+- **v2 (random_forest, 10 samples, 20 `.insn` executions)**: Total cycles **492928** = v1 RTL `C_v2_popcount_v1rtl.txt` (493448) − 20×26; row-by-row comparison over 8381 rows shows **0 differences** except the 20 `.insn` rows (68→42), including all followers back at 36.
+- Archives: `log/C_v2_popcount_v15lucky.txt` (compare_result), `log/C_v2_simlog_v15lucky.txt`, `log/C_v2_tracedump_v15lucky.txt`.
+- v2 firmware build dir: `Codespace/SERV_codespace/rf_v2_lucky/` (C/H sources from random_forest/modified_scripts + startup.S/main.c from base random_forest; note the modified main.c has a leftover `stdio.h` include and cannot be compiled as-is).

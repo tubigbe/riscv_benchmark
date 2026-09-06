@@ -45,7 +45,11 @@ tools/
 serv_project/log
 Codespace/practice_zhang/
 serv_project/obj_dir_custom/
-serv_project/fusesoc_libraries/
+serv_project/fusesoc_libraries/fusesoc_cores/
+serv_project/fusesoc_libraries/mdu/
+serv_project/fusesoc_libraries/picorv32/
+# backup of the flattened serv_v1.5_rtl embedded git repo (restoreable)
+serv_project/fusesoc_libraries/serv_v1.5_rtl.git.bak/
 serv_project/serv_rtl_v1/
 serv_project/plan/
 serv_project/DataFlow/

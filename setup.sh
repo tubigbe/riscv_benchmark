@@ -41,7 +41,7 @@ echo ""
 info "Verifying submodule content..."
 MISSING=0
 for dir in \
-    serv_project/fusesoc_libraries/serv \
+    serv_project/fusesoc_libraries/serv_v1.5_rtl \
     serv_project/fusesoc_libraries/mdu \
     serv_project/fusesoc_libraries/fusesoc_cores; do
     if [[ -d "$dir" ]] && [[ -n "$(ls -A "$dir" 2>/dev/null)" ]]; then

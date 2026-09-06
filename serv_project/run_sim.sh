@@ -28,12 +28,13 @@
 #    ./run_sim.sh --serv-dir=fusesoc_libraries/serv_bne   Use another SERV variant
 #
 #  SERV variant selection (SERV_DIR):
-#    Default : fusesoc_libraries/serv      (popcount custom-instruction SERV)
+#    Default : fusesoc_libraries/serv_v1.5_rtl   (v1.5 in-window-writeback custom-popcount SERV)
 #    BNE     : fusesoc_libraries/serv_bne  (teammate's conditional-branch
 #              early-exit SERV)
 #    Override via --serv-dir=<path> or the SERV_DIR environment variable.
-#    The two variants differ only in RTL: serv/ has serv_customized_{alu,state}.v,
-#    serv_bne/ has serv_bne_early.v; the rest of the file list is shared.
+#    The two variants differ only in RTL: serv_v1.5_rtl/ has
+#    serv_customized_{alu,state}.v, serv_bne/ has serv_bne_early.v; the rest of
+#    the file list is shared.
 #
 #  Pipeline steps:
 #    [1/4] CLEAN        Remove obj_dir_custom/
@@ -65,7 +66,7 @@ FIRMWARE="firmware.hex"
 
 # SERV RTL variant (popcount vs BNE early-exit). Overridable via
 # --serv-dir=... or the SERV_DIR environment variable.
-SERV_DIR="${SERV_DIR:-fusesoc_libraries/serv}"
+SERV_DIR="${SERV_DIR:-fusesoc_libraries/serv_v1.5_rtl}"
 
 # ── Parse arguments ──────────────────────────────────────────
 DO_CLEAN=false
@@ -90,7 +91,7 @@ for arg in "$@"; do
             echo "  --run         → run without rebuilding"
             echo "  --clear       → remove log files and VCD"
             echo "  --firmware=X  → use X as firmware (default: firmware.hex)"
-            echo "  --serv-dir=DIR→ SERV RTL dir (default: fusesoc_libraries/serv;"
+            echo "  --serv-dir=DIR→ SERV RTL dir (default: fusesoc_libraries/serv_v1.5_rtl;"
             echo "                  use fusesoc_libraries/serv_bne for the BNE variant)"
             exit 0
             ;;

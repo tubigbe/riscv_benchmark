@@ -7,9 +7,6 @@
 [submodule "serv_project/fusesoc_libraries/mdu"]
 	path = serv_project/fusesoc_libraries/mdu
 	url = https://github.com/zeeshanrafique23/mdu
-[submodule "serv_project/fusesoc_libraries/serv"]
-	path = serv_project/fusesoc_libraries/serv
-	url = https://github.com/olofk/serv
 [submodule "serv_project/tools/edtt"]
 	path = serv_project/tools/edtt
 	url = https://github.com/zephyrproject-rtos/edtt
