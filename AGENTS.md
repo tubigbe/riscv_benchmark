@@ -200,3 +200,76 @@ Make the popcount writeback **truly overlap** the execution of the following ins
 - **v2 (random_forest, 10 samples, 20 `.insn` executions)**: Total cycles **492928** = v1 RTL `C_v2_popcount_v1rtl.txt` (493448) − 20×26; row-by-row comparison over 8381 rows shows **0 differences** except the 20 `.insn` rows (68→42), including all followers back at 36.
 - Archives: `log/C_v2_popcount_v15lucky.txt` (compare_result), `log/C_v2_simlog_v15lucky.txt`, `log/C_v2_tracedump_v15lucky.txt`.
 - v2 firmware build dir: `Codespace/SERV_codespace/rf_v2_lucky/` (C/H sources from random_forest/modified_scripts + startup.S/main.c from base random_forest; note the modified main.c has a leftover `stdio.h` include and cannot be compiled as-is).
+
+## Appendix — scripts, environment & toolchain reference (moved out of README)
+
+> `README.md` is the short public-facing doc for readers (e.g. the teacher). This
+> appendix keeps the detailed per-script reference that was removed from it.
+
+### Environment & first-time setup
+- `source Codespace/env.sh` adds the in-repo RISC-V toolchain to PATH
+  (`tools/riscv64/usr/bin`, prefix `riscv64-unknown-elf-`).
+- `./setup.sh` (repo root): `git submodule update --init --recursive`, then verifies
+  that the working RTL dirs under `serv_project/fusesoc_libraries/` are non-empty.
+  Note: that whole directory is git-ignored **except** the four SERV variants, which
+  are committed directly (`serv_v1.5_rtl`, `serv_bne`, `serv_rtl_origin`,
+  `serv_rtl_v1`). The upstream clones `fusesoc_cores/ mdu/ picorv32/` stay ignored.
+- Toolchain requirements:
+  | Tool | Used by |
+  |---|---|
+  | `riscv64-unknown-elf-gcc/objcopy/objdump` | build.sh (compile/link/hex), trace_dump.py (symbols) |
+  | `verilator` (>=5) | run_sim.sh Verilator compile |
+  | `g++` | run_sim.sh testbench compile |
+  | `fusesoc` | build.sh `--run` path only (optional; primary sim is run_sim.sh) |
+  | `python3` | makehex.py, trace_dump.py, compare_traces.py |
+  | `gtkwave` (optional) | viewing log/sim_wave.vcd |
+
+### Pipeline
+```
+build.sh  (.c/.S, -march=rv32i, freestanding)  ->  firmware.hex
+run_sim.sh (clean -> verilator+g++ -> Vservant_sim)  ->  sim_log.txt + sim_wave.vcd + trace.bin
+trace_dump.py + compare_traces.py  ->  log/trace_dump.txt + log/compare_result.txt
+```
+RTL variant is selected with `--serv-dir=<dir>` on both build.sh and run_sim.sh
+(default `fusesoc_libraries/serv_v1.5_rtl`). `run_sim.sh` compiles the variant's
+own file list and adds conditional sources: `serv_customized_{alu,state}.v`
+(v1/v1.5 popcount) or `serv_bne_early.v` (bne).
+
+### scripts reference
+- `scripts/sim_main.cpp` — self-written Verilator testbench. Toggles wb_clk, applies
+  active-high reset, monitors `pc_vld`/`pc_adr` each rising edge and logs
+  `last_pc -> current_pc : N cycles` to `log/sim_log.txt`. Enabled with
+  `+vcd=1` (writes log/sim_wave.vcd) and `+trace_pc=1` (writes
+  build/…/verilator_tb/trace.bin). Simulation ends on the SoC halt (program writes
+  `0x90000000`) or after 10M cycles. Does NOT capture UART.
+- `scripts/trace_dump.py` — trace.bin (32-bit PCs) -> symbol-resolved
+  `log/trace_dump.txt`; also regenerates `firmware.dump` (objdump `-M no-aliases,numeric`).
+- `scripts/compare_traces.py` — merges sim_log.txt (cycle costs) with trace_dump.txt
+  (mnemonics) into `log/compare_result.txt`; merges two-part instructions (sw/lbu …)
+  and prints summary stats + per-instruction averages.
+- `scripts/cycle_cost.sh <start> <end>` — cycle cost between two PCs from
+  compare_result.txt (bare hex, `0x…`, or full-width accepted); writes
+  `log/cycle_cost_<s>_<e>.txt`.
+- `scripts/asm_sweep.sh` — O0–O3/Os sweep over input values, diffs vs a baseline.
+- `scripts/instr_counter.sh` — counts instruction mnemonics in firmware.elf
+  (whole or between two labels); output `log/instr_count.log`.
+- `serv_project/sim_wave.sh` — build+simulate then open the VCD in GTKWave.
+- `scripts/run_popcount_test.sh` / `scripts/reproduce_range_popcount.sh` — popcount
+  correctness helpers (default SERV_DIR `fusesoc_libraries/serv_v1.5_rtl`).
+
+### Program layout & termination conventions (teacher-facing)
+- Program folders live under `Codespace/SERV_codespace/`; each needs a `startup.S`
+  (template: `Codespace/SERV_codespace/build_codes/startup.S`), which sets
+  `sp = 8192`, raises the GPIO, calls `main()`, then on return writes `0x90000000`
+  (HALT) and loops — the SoC stops the simulation on that write.
+- Firmware flags: `-march=rv32i -mabi=ilp32 -O2 -static -nostdlib -nostartfiles
+  -ffreestanding`. Assembly files are linked before C so `_start` is at 0.
+- Custom popcount (v1 / v1.5 RTL only) is invoked from C via:
+  ```c
+  volatile static unsigned int popcnt_custom(unsigned int val) {
+      unsigned int rd;
+      asm volatile(".insn r 0x2B, 0, 0, %0, %1, x0"
+                   : "=r"(rd) : "r"(val));
+      return rd;
+  }
+  ```
