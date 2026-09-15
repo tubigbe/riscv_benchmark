@@ -1,16 +1,20 @@
 #include "infer_one.h"
 
-// Software popcount (standard RV32I): count set bits by looping.
-// v1 counterpart of the custom popcount instruction used in v2 —
-// the two infer_one implementations are otherwise identical.
-static unsigned int popcnt_sw(unsigned int x)
+static inline unsigned int popcnt(unsigned int val)
 {
+#ifdef USE_CUSTOM_POPCOUNT
+    unsigned int rd;
+    asm volatile(".insn r 0x2B, 0, 0, %0, %1, x0"
+                 : "=r"(rd) : "r"(val));
+    return rd;
+#else
     unsigned int c = 0;
-    while (x) {
-        c += x & 1;
-        x >>= 1;
+    while (val) {
+        c += val & 1;
+        val >>= 1;
     }
     return c;
+#endif
 }
 
 // Returns prediction for one datapoint
@@ -57,15 +61,14 @@ int infer_one(const int *x)
             row = right + row;
     }
 
-    // Majority vote using the software popcount (v2 uses the custom
-    // popcount instruction for exactly the same masks).
+    // Majority vote using popcount (hardware instruction or software fallback).
     // In each 2-bit field: 00 = class 0, 01 = class 1, 10 = class 2.
     unsigned int lo = packed_votes & 0x55555555;         // low bit of each field
     unsigned int hi = (packed_votes >> 1) & 0x55555555;  // high bit of each field
 
     // count1 = fields equal to 01, count2 = fields equal to 10
-    unsigned int count1 = popcnt_sw(lo & ~hi);
-    unsigned int count2 = popcnt_sw(hi & ~lo);
+    unsigned int count1 = popcnt(lo & ~hi);
+    unsigned int count2 = popcnt(hi & ~lo);
     unsigned int count0 = (unsigned int)vote_count - count1 - count2;
 
     int best_class = 0, best_count = (int)count0;

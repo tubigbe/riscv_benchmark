@@ -8,17 +8,22 @@
 
 **Status: ACHIEVED** — the custom popcount instruction runs at **42 cycles** with an **in-window writeback**: rd comes out clean (no high-bit garbage) and the following instruction is **not slowed at all**. v2 (random_forest) measurement: Total cycles **492928** = v1 RTL (493448) − 20×(68−42), row-identical to v1 RTL except the 20 `.insn` rows. Saved as git tag **`v1.5_lucky`** (commit `271570b`).
 
+**Next Task**: Merge two RTL designs together:
+- **v1.5 RTL** (`serv_project/fusesoc_libraries/serv_v1.5_rtl/`): Popcount optimization (42-cycle in-window writeback).
+- **BNE RTL** (`serv_project/fusesoc_libraries/serv_bne/`): Teammate's BNE early-exit optimization.
+Combine both into a unified design to achieve joint speedups from both popcount and branch early-exit.
+
 ## ⚠️ IMPORTANT — Optimization scope (read this first)
 
-**Only ONE folder of RTL needs to be edited for further optimization**:
+**RTL folders for the merge task**:
 ```
-serv_project/fusesoc_libraries/serv_v1.5_rtl/rtl/   ← edit only the .v files here
+serv_project/fusesoc_libraries/serv_v1.5_rtl/   ← v1.5 popcount design (base / target)
+serv_project/fusesoc_libraries/serv_bne/        ← BNE early-exit design (merge source)
 ```
 
-**Do NOT read** (they are not optimization targets; reading them wastes time):
-- `serv_project/fusesoc_libraries/serv_bne/` (teammate's BNE early-exit variant, a different optimization direction)
+**Do NOT read** (not relevant for this task):
 - `serv_project/fusesoc_libraries/serv_rtl_origin/` (original SERV, unoptimized)
-- Subdirectories outside `serv/rtl/`: `serv/servile/`, `serv/servant/`, `serv/bench/`, `serv/sw/` (shared infrastructure / testbenches — read-only, do not change)
+- Subdirectories outside `serv/rtl/`: `serv/servant/`, `serv/bench/`, `serv/sw/` (shared infrastructure / testbenches — read-only, do not change)
 - `Codespace/`, `serv_project/scripts/`, and other top-level directories
 
 > Core files for the popcount writeback: `serv_state.v`, `serv_top.v`, `serv_rf_ram_if.v`, `serv_customized_alu.v`, `serv_customized_state.v` (all under `serv/rtl/`).
@@ -200,6 +205,23 @@ Make the popcount writeback **truly overlap** the execution of the following ins
 - **v2 (random_forest, 10 samples, 20 `.insn` executions)**: Total cycles **492928** = v1 RTL `C_v2_popcount_v1rtl.txt` (493448) − 20×26; row-by-row comparison over 8381 rows shows **0 differences** except the 20 `.insn` rows (68→42), including all followers back at 36.
 - Archives: `log/C_v2_popcount_v15lucky.txt` (compare_result), `log/C_v2_simlog_v15lucky.txt`, `log/C_v2_tracedump_v15lucky.txt`.
 - v2 firmware build dir: `Codespace/SERV_codespace/rf_v2_lucky/` (C/H sources from random_forest/modified_scripts + startup.S/main.c from base random_forest; note the modified main.c has a leftover `stdio.h` include and cannot be compiled as-is).
+
+## Next Task — Merge RTL Designs: v1.5 (Popcount) + BNE (Early-Exit)
+
+### Objective
+Merge the two distinct RTL optimization branches into a single unified SERV core:
+1. **v1.5 Popcount optimization** (`serv_project/fusesoc_libraries/serv_v1.5_rtl/`):
+   - Custom 2-stage popcount instruction (`.insn`, 42 cycles).
+   - In-window writeback (stage 1 zero-fill + stage 2 count write, zero follower stall, clean `rd`).
+   - Core files: `serv_customized_alu.v`, `serv_customized_state.v`, `serv_top.v`, `serv_state.v`, `servile/servile.v`.
+2. **BNE Early-Exit branch optimization** (`serv_project/fusesoc_libraries/serv_bne/`):
+   - Early-exit evaluation when inequality is determined early, reducing cycle latency on branch instructions.
+   - Core files: `serv_bne_early.v`, along with modifications to `serv_state.v`, `serv_ctrl.v`, etc.
+
+### Merge Goals & Verification
+- Combine both datapaths into a unified RTL codebase without conflicting state-machine signals (`custom_stage2_done`, early fetch, and BNE branch early-exit control).
+- Ensure correctness: Verify that popcount retains its 42-cycle clean in-window execution and that BNE continues to early-terminate as expected.
+- Validate on the `random_forest` benchmark and dedicated popcount test suite (`run_popcount_test.sh`).
 
 ## Appendix — scripts, environment & toolchain reference (moved out of README)
 

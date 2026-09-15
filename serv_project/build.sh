@@ -68,6 +68,11 @@ cd "$SCRIPT_DIR"
 
 # ── Toolchain (prefers env.sh exports, falls back to riscv64 prefix) ──
 _prefix="${RISCV64_PREFIX:-riscv64-unknown-elf-}"
+if ! command -v "${_prefix}gcc" >/dev/null 2>&1; then
+    if [[ -d "$SCRIPT_DIR/../tools/riscv64/usr/bin" ]]; then
+        export PATH="$SCRIPT_DIR/../tools/riscv64/usr/bin:$PATH"
+    fi
+fi
 CC="${CC:-${_prefix}gcc}"
 CXX="${CXX:-${_prefix}g++}"
 OBJCOPY="${OBJCOPY:-${_prefix}objcopy}"
@@ -79,6 +84,12 @@ FUSESOC="${FUSESOC:-fusesoc}"
 # riscv-gnu-toolchain/binutils. -B makes gcc pick our `as` first.
 CUSTOM_BINUTILS_BIN="$SCRIPT_DIR/../riscv-gnu-toolchain/install/bin"
 [[ -x "$CUSTOM_BINUTILS_BIN/riscv64-unknown-elf-as" ]] && BFLAG="-B$CUSTOM_BINUTILS_BIN" || BFLAG=""
+
+# Ensure toolchain shared libraries (libisl, libmpfr, libmpc) are discoverable in container/snap envs
+_libdir="$SCRIPT_DIR/../tools/lib"
+if [[ -d "$_libdir" ]]; then
+    export LD_LIBRARY_PATH="$_libdir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 
 # ── Compiler flags ───────────────────────────────────────────
 ARCH=rv32i
@@ -139,6 +150,10 @@ do_build() {
     info "Building firmware..."
     echo ""
 
+    # Re-evaluate linker script and makehex paths in case --serv-dir was specified
+    LDSCRIPT="$SERV_DIR/sw/link.ld"
+    MAKEHEX="$SERV_DIR/sw/makehex.py"
+
     [[ -f "$LDSCRIPT" ]] || fail "Linker script not found: $LDSCRIPT"
     [[ -f "$MAKEHEX" ]]  || fail "makehex.py not found: $MAKEHEX"
 
@@ -160,6 +175,11 @@ do_build() {
     # Add folder to include path so local headers work
     INCLUDES="-I$SCRIPT_DIR/../Codespace -I$FOLDER_PATH"
     CFLAGS="-O2 $COMMON_FLAGS $INCLUDES"
+
+    if $USE_POPCOUNT; then
+        CFLAGS="$CFLAGS -DUSE_CUSTOM_POPCOUNT"
+        info "Hardware popcount enabled (-DUSE_CUSTOM_POPCOUNT)"
+    fi
 
     info "Folder: $FOLDER_PATH"
 
@@ -197,6 +217,18 @@ do_build() {
         esac
         TOTAL=$((TOTAL + 1))
     done
+
+    # ── Fallback startup assembly if none provided in target folder ──
+    if [[ ${#ASM_SRCS[@]} -eq 0 ]]; then
+        local FALLBACK_STARTUP="$SERV_CODESPACE/build_codes/startup.S"
+        if [[ -f "$FALLBACK_STARTUP" ]]; then
+            info "No assembly file found in $FOLDER_PATH; using fallback startup: $FALLBACK_STARTUP"
+            ASM_SRCS+=("$FALLBACK_STARTUP")
+            TOTAL=$((TOTAL + 1))
+        else
+            fail "No assembly file in $FOLDER_PATH and fallback startup not found at $FALLBACK_STARTUP"
+        fi
+    fi
 
     [[ $TOTAL -eq 0 ]] && fail "No source files to compile"
 
@@ -284,12 +316,13 @@ do_clear() {
 #  Main: parse command-line arguments
 # ══════════════════════════════════════════════════════════════
 usage() {
-    echo "Usage: $0 [--folder=NAME] [--serv-dir=DIR] [--build] [--run] [--clear]"
+    echo "Usage: $0 [--folder=NAME] [--serv-dir=DIR] [--popcount] [--build] [--run] [--clear]"
     echo ""
     echo "  --folder=NAME   Build from Codespace/SERV_codespace/NAME/ (default: build_codes/)"
     echo "  --serv-dir=DIR  SERV RTL dir for sw/link.ld & sw/makehex.py"
     echo "                  (default: fusesoc_libraries/serv_v1.5_rtl;"
     echo "                   use fusesoc_libraries/serv_bne for the BNE variant)"
+    echo "  --popcount      Enable custom hardware popcount (-DUSE_CUSTOM_POPCOUNT)"
     echo "  --build         Compile firmware (deduplicates sources automatically)"
     echo "  --run           Launch Verilator simulation"
     echo "  --clear         Remove all build artifacts"
@@ -299,8 +332,10 @@ usage() {
     echo ""
     echo "Examples:"
     echo "  $0 --build                         # compile from build_codes/"
-    echo "  $0 --folder=Week_3/Task_2 --build  # compile from Week_3/Task_2/"
-    echo "  $0 --folder=fib --build --run      # compile + simulate from fib/"
+    echo "  $0 --folder=random_forest --build  # compile software popcount"
+    echo "  $0 --folder=random_forest --popcount --build  # compile hardware popcount"
+    echo "  $0 --folder=BNN --build            # compile BNN (auto startup fallback)"
+    echo "  $0 --folder=Tsetin_Machine --popcount --build # compile TM with popcount"
     echo "  $0 --serv-dir=fusesoc_libraries/serv_bne --build   # BNE SERV variant"
     echo "  $0 --clear                         # clear artifacts"
 }
@@ -312,15 +347,17 @@ fi
 
 DO_BUILD=false
 DO_RUN=false
+USE_POPCOUNT=false
 
 for arg in "$@"; do
     case "$arg" in
-        --folder=*) FOLDER="${arg#*=}" ;;
+        --folder=*)   FOLDER="${arg#*=}" ;;
         --serv-dir=*) SERV_DIR="${arg#*=}" ;;
-        --build)    DO_BUILD=true ;;
-        --run)      DO_RUN=true ;;
-        --clear)    do_clear; exit 0 ;;
-        --help|-h)  usage; exit 0 ;;
+        --popcount)   USE_POPCOUNT=true ;;
+        --build)      DO_BUILD=true ;;
+        --run)        DO_RUN=true ;;
+        --clear)      do_clear; exit 0 ;;
+        --help|-h)    usage; exit 0 ;;
         *) fail "Unknown argument: $arg (use --help for usage)" ;;
     esac
 done

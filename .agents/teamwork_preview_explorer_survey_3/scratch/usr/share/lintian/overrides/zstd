@@ -1,0 +1,4 @@
+zstd: binary-without-manpage usr/bin/zstdgrep
+zstd: binary-without-manpage usr/bin/zstdless
+zstd: binary-without-manpage usr/bin/zstdmt
+zstd: manpage-has-errors-from-man
