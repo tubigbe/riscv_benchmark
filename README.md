@@ -1,12 +1,12 @@
 # SERV RISC-V Simulation & Cycle-Cost Project
 
 Compile RISC-V firmware, run it on a Verilator simulation of the SERV SoC, and get a
-per-instruction cycle-cost report. Four SERV RTL variants are provided so the same
+per-instruction cycle-cost report. Five SERV RTL variants are provided so the same
 program can be compared across different CPU designs.
 
 ---
 
-## 1. Four SERV RTL Variants
+## 1. Five SERV RTL Variants
 
 All variants live under `serv_project/fusesoc_libraries/` and share the same firmware
 build & simulation flow. Pick one with `--serv-dir` (default: `serv_v1.5_rtl`).
@@ -17,9 +17,10 @@ build & simulation flow. Pick one with `--serv-dir` (default: `serv_v1.5_rtl`).
 | `serv_rtl_v1` | SERV + a custom **popcount** instruction (32-bit input, `rs1`), 68 cycles per execution. |
 | `serv_v1.5_rtl` | SERV + the custom popcount instruction (32-bit input, `rs1`), **42 cycles** per execution with in-window writeback (clean `rd`, no penalty on the next instruction). **Default.** |
 | `serv_bne` | SERV with an early-exit optimization for conditional branches. |
+| `serv_rtl_merge` | **Unified design** merging the **42-cycle popcount** and **branch early-exit** optimizations into a single core. Achieves cumulative speedups without state machine conflicts or redundant flip-flops. |
 
-Plain RV32I programs run on all four variants. The custom popcount instruction is only
-available on `serv_rtl_v1` and `serv_v1.5_rtl`.
+Plain RV32I programs run on all five variants. The custom popcount instruction is available
+on `serv_rtl_v1`, `serv_v1.5_rtl`, and `serv_rtl_merge`.
 
 ---
 
@@ -40,8 +41,14 @@ riscv_benchmark/
 │   │   ├── trace_dump.py            trace.bin → symbol-resolved trace
 │   │   └── compare_traces.py        Merge cycle costs + trace → report
 │   ├── log/                         Simulation outputs & reports
-│   └── fusesoc_libraries/           The four SERV RTL variants (see §1)
-└── AGENTS.md                        Detailed internal notes / script reference
+│   └── fusesoc_libraries/           SERV RTL variants & PicoRV32 baseline
+│       ├── serv_v1.5_rtl/           v1.5 popcount design (default)
+│       ├── serv_bne/                BNE branch early-exit design
+│       ├── serv_rtl_merge/          Unified design (popcount 42-cycle + branch early-exit)
+│       ├── serv_rtl_origin/         Original upstream SERV
+│       ├── serv_rtl_v1/             v1 popcount design
+│       └── picorv32/                PicoRV32 multi-cycle baseline (see §7)
+└── AGENTS.md                        Detailed internal notes, scripts & measurement guide
 ```
 
 ---
@@ -149,4 +156,54 @@ volatile static unsigned int popcnt_custom(unsigned int val) {
 
 ---
 
-See `AGENTS.md` for detailed internal notes and a full script reference.
+## 7. PicoRV32 Baseline Simulation & Cycle Measurement
+
+To benchmark SERV against an industry-standard 32-bit multi-cycle RISC-V core, this repository provides a dedicated build and simulation pipeline for **PicoRV32** under `serv_project/fusesoc_libraries/picorv32/`.
+
+### Cycle Measurement Principle (Summary)
+
+- **Execution Model**: PicoRV32 is a multi-cycle core with standard 32-bit datapath (CPI typically ~3–4), running alongside SERV's 1-bit serial architecture (~32–68 cycles/instruction).
+- **Measurement & Halt Mechanism**:
+  1. Firmware is compiled freestanding (`-march=rv32ic -mabi=ilp32 -O2`) with `firmware/startup_pico.S`.
+  2. When execution finishes, `startup_pico.S` signals success by writing `123456789` to address `0x20000000`, then executes `ebreak`.
+  3. The `ebreak` triggers the hardware `trap` signal.
+  4. The Verilator testbench (`testbench.v`) continuously increments `cycle_counter` on every `posedge clk`. Upon detecting `trap`, it prints:
+     ```text
+     TRAP after <cycles> clock cycles
+     ALL TESTS PASSED.
+     ```
+- **Quick Start**:
+  ```bash
+  cd serv_project/fusesoc_libraries/picorv32
+  ./build.sh --folder=random_forest --build --run   # Compile and simulate
+  ```
+
+> 📖 **Comprehensive Documentation**:
+> A complete architectural breakdown, memory layout (128KB RAM map, MMIO, BSS zeroing), linker script safeguards, trace decoding with `showtrace.py`, and detailed cycle benchmark comparisons against SERV are thoroughly documented in [**`AGENTS.md`**](file:///home/chenyoo/riscv_benchmark/AGENTS.md#picorv32-baseline-simulation--cycle-measurement).
+
+---
+
+## 8. Current Status & Next Plans
+
+### Completed Milestones
+1. **Custom Popcount Optimization (`v1.5_lucky`)**:
+   - Custom 2-stage popcount instruction (`.insn`, 42 cycles) with in-window writeback.
+   - Zero follower instruction stall (all followers run at baseline 36 cycles) and clean 32-bit `rd`.
+2. **Unified RTL Merge (`serv_rtl_merge`)**:
+   - Successfully merged **v1.5 popcount** and **BNE branch early-exit** into a unified core under `serv_project/fusesoc_libraries/serv_rtl_merge/`.
+   - Verified on `random_forest` (10 samples): Total execution cycles dropped to **464,213 cycles** (-11.8% vs. original SERV 526,208; -5.8% vs. v1.5 492,928).
+   - Execution path is 100% identical (0 mismatch), with 1,009 accelerated branches.
+3. **PicoRV32 Comparative Baseline**:
+   - Automated `build.sh` and `run_sim.sh` pipeline created and verified on `random_forest` (39,901 cycles).
+
+### Next Plans & Future Work
+1. **Broader Benchmark Suite Evaluation**:
+   - Run and evaluate `serv_rtl_merge` and PicoRV32 across additional workloads: `BNN` (Binarized Neural Network), `Tsetlin_Machine`, and `dhrystone`.
+2. **Branch Optimization Extensions**:
+   - Explore extending early-exit optimizations beyond equality/inequality (`BEQ`/`BNE`) to magnitude comparisons (`BLT`, `BGE`, `BLTU`, `BGEU`).
+3. **FPGA Synthesis & Silicon Resource Accounting**:
+   - Run FPGA synthesis (e.g. Vivado / Yosys) on `serv_rtl_merge` to quantify the exact LUT/FF area overhead compared to original SERV and PicoRV32.
+
+---
+
+See [`AGENTS.md`](file:///home/chenyoo/riscv_benchmark/AGENTS.md) for detailed internal notes, RTL implementation details, and the full script reference.
