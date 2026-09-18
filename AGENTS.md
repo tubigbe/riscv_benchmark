@@ -1,3 +1,8 @@
+<!-- engineering-log hook | 请勿删改本段 -->
+> **本项目受《工程日志规程》约束。**
+> 工程日志**只允许追加**，不得编辑、不得删除任何已有条目。
+> 凡涉及日志的读取、追加、蒸馏、审核、镜像，**必须先加载 skill：`engineering-log`**。
+
 # AGENTS.md — SERV RISC-V Popcount Optimization
 
 ## Project Overview
