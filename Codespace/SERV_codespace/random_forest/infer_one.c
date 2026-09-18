@@ -4,7 +4,13 @@ static inline unsigned int popcnt(unsigned int val)
 {
 #ifdef USE_CUSTOM_POPCOUNT
     unsigned int rd;
-    asm volatile(".insn r 0x2B, 0, 0, %0, %1, x0"
+    /* Official Zbb "cpop rd, rs1" encoding:
+     *   opcode=0010011 (OP-IMM), funct3=001, imm[11:0]=0x602
+     * Hand-written .insn keeps zbb/zbs invisible to the compiler, so no
+     * Zb* instruction other than this one can ever reach the binary.
+     * Do NOT add zbs to -march: `binvi rd, rs1, 2` would collide with the
+     * RTL's minimal cpop detection and silently be taken as a popcount. */
+    asm volatile(".insn i 0x13, 1, %0, %1, 0x602"
                  : "=r"(rd) : "r"(val));
     return rd;
 #else
