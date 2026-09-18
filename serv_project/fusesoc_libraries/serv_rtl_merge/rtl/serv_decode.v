@@ -246,7 +246,17 @@ module serv_decode
 
          always @(posedge clk) begin
             if (i_wb_en) begin
-               if (i_wb_rdt[6:2] == 5'b01010) begin
+               // Official Zbb "cpop rd, rs1" encoding is hijacked as our custom
+               // popcount: opcode=0010011 (OP-IMM), funct3=001, imm[11:0]=0110_0000_0010.
+               // The minimal form below tests only 8 bits and is equivalent for cpop:
+               //   inst[4] & ~inst[2]                -> OP-IMM
+               //   ~inst[14] & ~inst[13] & inst[12]  -> funct3 == 001
+               //   inst[30] & inst[29] & inst[21]    -> the 0110000 / 00010 unary pattern
+               // CAUTION: this is not injective. `binvi rd, rs1, 2` (Zbs) shares these
+               // bits, so -march must NOT enable zbs (we only emit cpop via inline asm).
+               if ((i_wb_rdt[4] & ~i_wb_rdt[2]) &
+                   (~i_wb_rdt[14] & ~i_wb_rdt[13] & i_wb_rdt[12]) &
+                   (i_wb_rdt[30] & i_wb_rdt[29] & i_wb_rdt[21])) begin
                   is_customized <= 1'b1;
                   opcode <= 5'b01100;
                   funct3 <= i_wb_rdt[14:12];
