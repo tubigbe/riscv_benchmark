@@ -17,15 +17,21 @@ static void puthex(uint32_t v) {
     }
 }
 
+/* Official Zbb "cpop rd, rs1".
+ * GCC expands __builtin_popcount() into cpop when -march enables zbb
+ * (build.sh --zbb -> -march=rv32i_zbb). The merged RTL recognises the official
+ * cpop encoding and runs it on the custom popcount datapath.
+ *
+ * Was: asm volatile(".insn r 0x2B, 0, 0, %0, %1, x0") -- our private custom-1
+ * encoding, which the RTL no longer recognises. */
 volatile static unsigned int popcnt_custom(unsigned int val) {
-    unsigned int rd;
-    asm volatile(".insn r 0x2B, 0, 0, %0, %1, x0"
-                 : "=r"(rd) : "r"(val));
-    return rd;
+    return (unsigned int)__builtin_popcount(val);
 }
 
 int main(void){
-    uint32_t reg_x1 = 0x000fffff;
+    /* MUST stay volatile: with a plain literal, GCC constant-folds
+     * __builtin_popcount(0x000fffff) into `li a5,20` and emits no cpop at all. */
+    volatile uint32_t reg_x1 = 0x000fffff;
 
     popcount_sink = popcnt_custom(reg_x1);
 
