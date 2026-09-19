@@ -39,6 +39,67 @@ serv_project/fusesoc_libraries/
 > Core files for the popcount writeback: `serv_state.v`, `serv_top.v`, `serv_rf_ram_if.v`, `serv_customized_alu.v`, `serv_customized_state.v` (all under `serv/rtl/`).
 > One exception: `servile/servile.v` contains the `i_rf_wr_busy` wiring (the real datapath); if you change `serv_rf_ram_if`/`serv_top` ports, check it in sync.
 
+## ★ Current cpop route (2026-09-19) — READ BEFORE TOUCHING POPCOUNT
+
+The custom popcount is triggered by the **official Zbb `cpop` encoding**
+(`opcode=0010011` OP-IMM, `funct3=001`, `imm[11:0]=0x602`) — **not** the old
+private custom-1 encoding `.insn r 0x2B, 0, 0`, which the RTL no longer
+recognises. `serv_decode.v` in `serv_rtl_merge` matches that encoding
+(commit `dac74f9`).
+
+Firmware triggers it with a **local assembler scope** in the inline asm:
+
+```c
+asm volatile(".option push\n"
+             ".option arch, +zbb\n"
+             "cpop %0, %1\n"
+             ".option pop\n"
+             : "=r"(rd) : "r"(val));
+```
+
+### ⛔ Global `-march=...zbb` is ABANDONED — do not revive it
+
+`-march` is a **promise** to the compiler, not a request. It makes GCC's
+instruction selection free to use the whole extension. With `-march=rv32i_zbb`
+GCC emitted, alongside `cpop`:
+
+| source pattern | emitted | this RTL |
+|---|---|---|
+| `__builtin_popcount` | `cpop` | ✅ implemented |
+| `a & ~b` | **`andn`** | ❌ silently computed as a plain `and` |
+| `__builtin_clz` / `ctz` | `clz` / `ctz` | ❌ |
+| `a<b?a:b` / `a>b?a:b` | `minu` / `maxu` | ❌ |
+| rotate, `a\|~b`, `~(a^b)`, `bswap` | `rol` / `orn` / `xnor` / `rev8` | ❌ |
+
+**Measured failure (2026-09-19)**: `random_forest` built with `--zbb` produced
+`andn` × 2 (from `popcnt(lo & ~hi)` / `popcnt(hi & ~lo)`). SERV evaluates
+`andn` as a plain `and` — `serv_alu.v` maps `bool_op=11` to `rs1 & op_b`. Since
+`lo` and `hi` occupy disjoint bit positions, `lo & hi == 0`, so both vote
+counts collapsed to 0 and **all 10 samples were classified as class 0** — with
+no trap, no diagnostic, and `cpop` still reporting a healthy 42 cycles.
+
+### Why the local `.option` form is the safe one
+
+Keeping `-march=rv32i` globally makes other Zb instructions **impossible to
+emit** — the compiler does not know Zbb exists. `.option` is an *assembler*
+directive, so it only lets `as` parse the `cpop` mnemonic inside that block.
+GAS then tags exactly that region with a `$xrv32i2p1_zbb1p0` **mapping
+symbol**, and objdump disassembles **per mapping symbol** — so the dump shows
+`cpop` instead of a bare `.insn`. (The ELF `Tag_RISCV_arch` stays `rv32i2p1`;
+it is *not* what drives the display. Verified by building two objects with
+byte-identical attributes and identical code bytes that still disassembled
+differently.)
+
+`build.sh --zbb` is kept **only to reproduce the experiment**. Do not use it
+for real builds.
+
+### Verified state on the merged RTL
+
+| firmware | instructions / cycles | cpop | other Zb | result |
+|---|---|---|---|---|
+| `random_forest` (`--popcount`) | 8381 / 464213 | 20 × 42 | **0** | `[2,2,1,2,2,2,2,0,0,1]` = `predicted_class.txt` |
+| `build_codes` | 1648 / 83657 | 1 × 42 | **0** | `popcount_sink = 0x14` |
+
 ## Current Design (v1.5_temp, commit `32f3f64`) — HISTORICAL: writeback superseded by v1.5_lucky
 
 > ⚠️ The `custom_wr_active`/`wr_timer`/`custom_rd` out-of-band 36-cycle writeback described here is the **old mechanism**, removed in v1.5_lucky (commit `271570b`) and replaced by the "in-window writeback" (stage1 zero-fill + stage2 count write; see the **v1.5_lucky** section at the end). The stage1/stage2/`custom_stage2_done`/early-fetch structure is still valid.
@@ -126,11 +187,13 @@ cat log/compare_result.txt          # Merged trace with per-instruction cycle in
 
 ### Current Test Firmware
 
-`Codespace/SERV_codespace/build_codes/popcount_cus.c` — computes `popcount_sink = popcnt_custom(19149)` and prints it via UART:
+`Codespace/SERV_codespace/build_codes/popcount_cus.c` — computes `popcount_sink = popcnt_custom(0x000fffff)` (20) and prints it via UART as `popcount_sink = 0x00000014`:
 
 ```
-popcount_sink = 0x00000008
+popcount_sink = 0x00000014
 ```
+
+(The old description said `popcnt_custom(19149)` → `0x08`; the test value has since changed to `0x000fffff`. Verified 2026-09-19: merged RTL, 1648 instr / 83657 cycles, `cpop` 1× @42, `popcount_sink` reads back `0x14`.)
 
 UART output appears on the GPIO/`q` line (bit-banged by `asm_uart_putchar` in `startup.S`). The testbench does NOT capture UART; inspect `q` in `log/sim_wave.vcd` or add capture if needed.
 
@@ -454,12 +517,20 @@ own file list and adds conditional sources: `serv_customized_{alu,state}.v`
   (HALT) and loops — the SoC stops the simulation on that write.
 - Firmware flags: `-march=rv32i -mabi=ilp32 -O2 -static -nostdlib -nostartfiles
   -ffreestanding`. Assembly files are linked before C so `_start` is at 0.
-- Custom popcount (v1 / v1.5 RTL only) is invoked from C via:
+- Custom popcount is invoked from C via a **locally scoped** `cpop` — see the
+  "★ Current cpop route" section at the top for the full rationale:
   ```c
   volatile static unsigned int popcnt_custom(unsigned int val) {
       unsigned int rd;
-      asm volatile(".insn r 0x2B, 0, 0, %0, %1, x0"
+      asm volatile(".option push\n"
+                   ".option arch, +zbb\n"
+                   "cpop %0, %1\n"
+                   ".option pop\n"
                    : "=r"(rd) : "r"(val));
       return rd;
   }
   ```
+  Requires an RTL variant that recognises the **official** `cpop` encoding
+  (`serv_rtl_merge` since `dac74f9`). The old private encoding
+  `.insn r 0x2B, 0, 0` is **no longer recognised** — using it now yields
+  whatever the decoder makes of opcode `01010`, silently.
