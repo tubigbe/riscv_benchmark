@@ -316,13 +316,17 @@ do_clear() {
 #  Main: parse command-line arguments
 # ══════════════════════════════════════════════════════════════
 usage() {
-    echo "Usage: $0 [--folder=NAME] [--serv-dir=DIR] [--popcount] [--build] [--run] [--clear]"
+    echo "Usage: $0 [--folder=NAME] [--serv-dir=DIR] [--popcount] [--zbb] [--build] [--run] [--clear]"
     echo ""
     echo "  --folder=NAME   Build from Codespace/SERV_codespace/NAME/ (default: build_codes/)"
     echo "  --serv-dir=DIR  SERV RTL dir for sw/link.ld & sw/makehex.py"
     echo "                  (default: fusesoc_libraries/serv_v1.5_rtl;"
     echo "                   use fusesoc_libraries/serv_bne for the BNE variant)"
     echo "  --popcount      Enable custom hardware popcount (-DUSE_CUSTOM_POPCOUNT)"
+    echo "  --zbb           Compile with -march=rv32i_zbb (default is rv32i). Lets GCC"
+    echo "                  emit the official Zbb cpop for __builtin_popcount."
+    echo "                  NOTE: zbb also licenses clz/ctz/min/max/rol/andn/orn/xnor/rev8,"
+    echo "                  which this RTL does NOT implement -- they fail silently."
     echo "  --build         Compile firmware (deduplicates sources automatically)"
     echo "  --run           Launch Verilator simulation"
     echo "  --clear         Remove all build artifacts"
@@ -354,6 +358,7 @@ for arg in "$@"; do
         --folder=*)   FOLDER="${arg#*=}" ;;
         --serv-dir=*) SERV_DIR="${arg#*=}" ;;
         --popcount)   USE_POPCOUNT=true ;;
+        --zbb)        ARCH=rv32i_zbb ;;
         --build)      DO_BUILD=true ;;
         --run)        DO_RUN=true ;;
         --clear)      do_clear; exit 0 ;;
@@ -361,6 +366,10 @@ for arg in "$@"; do
         *) fail "Unknown argument: $arg (use --help for usage)" ;;
     esac
 done
+
+# ARCH is assigned above the option parser, so the arch-dependent flags must be
+# re-derived here after --zbb may have switched it to rv32i_zbb.
+COMMON_FLAGS="-march=$ARCH -mabi=$ABI -static -nostdlib -nostartfiles -ffreestanding"
 
 if $DO_BUILD; then do_build; fi
 if $DO_RUN;   then do_run;   fi
