@@ -4,13 +4,22 @@ static inline unsigned int popcnt(unsigned int val)
 {
 #ifdef USE_CUSTOM_POPCOUNT
     unsigned int rd;
-    /* Official Zbb "cpop rd, rs1" encoding:
-     *   opcode=0010011 (OP-IMM), funct3=001, imm[11:0]=0x602
-     * Hand-written .insn keeps zbb/zbs invisible to the compiler, so no
-     * Zb* instruction other than this one can ever reach the binary.
-     * Do NOT add zbs to -march: `binvi rd, rs1, 2` would collide with the
-     * RTL's minimal cpop detection and silently be taken as a popcount. */
-    asm volatile(".insn i 0x13, 1, %0, %1, 0x602"
+    /* Official Zbb cpop, enabled for this asm block only.
+     *
+     * -march stays rv32i globally, so GCC's instruction selection can never
+     * emit any other Zb* instruction (clz/ctz/min/max/rol/andn/orn/xnor/rev8),
+     * none of which this RTL implements.  `.option` is an *assembler*
+     * directive: it lets `as` accept the cpop mnemonic here, and GAS tags
+     * exactly this region with a `$xrv32i2p1_zbb1p0` mapping symbol, so objdump
+     * decodes it back as `cpop` instead of a bare `.insn`.
+     *
+     * Do NOT put zbb into -march: that hands the whole extension to the
+     * compiler, and e.g. `lo & ~hi` becomes andn -- which SERV silently
+     * evaluates as a plain and (measured: every sample misclassified as 0). */
+    asm volatile(".option push\n"
+                 ".option arch, +zbb\n"
+                 "cpop %0, %1\n"
+                 ".option pop\n"
                  : "=r"(rd) : "r"(val));
     return rd;
 #else
